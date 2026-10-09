@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import re
 import pandas as pd
 import yaml
@@ -9,17 +10,28 @@ def load_config():
     with open(ROOT / "config.yaml", "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
+def _data_dir(key, env_var):
+    """Directory from config.yaml, overridable by an environment variable.
+
+    The overrides let tests and the synthetic demo run the pipeline in an
+    isolated location without touching real ADNI data or artifacts.
+    """
+    override = os.getenv(env_var)
+    if override:
+        return Path(override)
+    return ROOT / load_config()["data"][key]
+
 def raw_dir():
-    return ROOT / load_config()["data"]["raw_dir"]
+    return _data_dir("raw_dir", "ALZ_RAW_DIR")
 
 def processed_dir():
-    return ROOT / load_config()["data"]["processed_dir"]
+    return _data_dir("processed_dir", "ALZ_PROCESSED_DIR")
 
 def artifacts_dir():
-    return ROOT / load_config()["data"]["artifacts_dir"]
+    return _data_dir("artifacts_dir", "ALZ_ARTIFACTS_DIR")
 
 def reports_dir():
-    return ROOT / load_config()["data"]["reports_dir"]
+    return _data_dir("reports_dir", "ALZ_REPORTS_DIR")
 
 def newest_csv(prefix):
     candidates = sorted(raw_dir().glob(f"{prefix}*.csv"), key=lambda p: p.stat().st_mtime, reverse=True)
@@ -74,7 +86,7 @@ def baseline_only(df):
         if mask.any():
             return df.loc[mask].copy()
 
-    date_col = find_column(df, ["EXAMDATE", "EXAMDATE2", "USERDATE", "EXAMDATE"], required=False)
+    date_col = find_column(df, ["EXAMDATE", "EXAMDATE2", "SCANDATE", "USERDATE"], required=False)
     if date_col:
         tmp = df.copy()
         tmp["_date"] = pd.to_datetime(tmp[date_col], errors="coerce")

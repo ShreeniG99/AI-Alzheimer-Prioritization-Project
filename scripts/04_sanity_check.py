@@ -2,7 +2,7 @@ import argparse
 import json
 import pandas as pd
 from pathlib import Path
-from common import ROOT, processed_dir, artifacts_dir
+from common import ROOT, load_config, processed_dir, artifacts_dir
 
 def main(stage):
     data = pd.read_csv(processed_dir() / f"{stage}.csv")
@@ -26,5 +26,5 @@ def main(stage):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--stage", choices=["stage1","stage3"], required=True)
+    ap.add_argument("--stage", choices=list(load_config()["features"]), required=True)
     main(ap.parse_args().stage)

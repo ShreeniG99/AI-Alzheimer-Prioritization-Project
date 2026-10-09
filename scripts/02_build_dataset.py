@@ -96,6 +96,52 @@ ALIASES = {
         "AtlasScalingFactor",
     ],
 
+    # Stage 2 plasma biomarkers (ADNI UPenn Fujirebio/Quanterix table).
+    "ptau217": [
+        "pT217_F",
+        "PTAU217",
+        "PT217",
+        "pTau217",
+    ],
+
+    "ab42_ab40": [
+        "AB42_AB40_F",
+        "AB42AB40",
+        "AB4240",
+        "ABETA42_40",
+    ],
+
+    "nfl": [
+        "NfL_Q",
+        "NFL",
+        "PLASMA_NFL",
+    ],
+
+    "gfap": [
+        "GFAP_Q",
+        "GFAP",
+        "PLASMA_GFAP",
+    ],
+
+    # Stage 4 PET (ADNI UC Berkeley amyloid/tau summary tables).
+    "amyloid_centiloid": [
+        "CENTILOIDS",
+        "CENTILOID",
+        "AMYLOID_CENTILOID",
+    ],
+
+    "amyloid_suvr": [
+        "SUMMARY_SUVR",
+        "SUVR",
+        "AMYLOID_SUVR",
+    ],
+
+    "tau_suvr": [
+        "META_TEMPORAL_SUVR",
+        "TAU_SUVR",
+        "METATEMPORAL_SUVR",
+    ],
+
     "dx": [
         "DX",
         "DXCURREN",
@@ -239,107 +285,87 @@ def prepare_cognitive():
 
 
 # ============================================================
-# MRI VARIABLES — STAGE 3
+# LATER-STAGE MODALITIES — STAGES 2, 3 AND 4
 # ============================================================
 
-def prepare_mri():
+# Each pathway stage adds one modality. A modality may be spread over
+# several ADNI tables (e.g. amyloid and tau PET); all matching tables are
+# merged on RID.
+MODALITIES = {
+    "plasma": {
+        "prefixes": ["UPENN_PLASMA_FUJIREBIO_QUANTERIX_", "PLASMA_"],
+        "keys": ["ptau217", "ab42_ab40", "nfl", "gfap"],
+    },
+    "mri": {
+        "prefixes": ["All_Subjects_Key_MRI_", "UCSFFSX7_"],
+        "keys": ["eTIV", "nWBV", "ASF"],
+    },
+    "pet": {
+        "prefixes": ["UCBERKELEY_AMY_6MM_", "UCBERKELEY_TAU_6MM_"],
+        "keys": ["amyloid_centiloid", "amyloid_suvr", "tau_suvr"],
+    },
+}
 
-    sources = []
+# Modality that a participant must have to be included at each stage.
+# Earlier optional modalities are left-joined (missing values are handled
+# by the model's imputation + missingness indicators).
+STAGE_MODALITIES = {
+    "stage1": {"required": None, "optional": []},
+    "stage2": {"required": "plasma", "optional": []},
+    "stage3": {"required": "mri", "optional": ["plasma"]},
+    "stage4": {"required": "pet", "optional": ["plasma", "mri"]},
+}
 
-    try:
 
-        sources.append(
-            baseline_only(
-                read_prefix(
-                    "All_Subjects_Key_MRI_"
-                )
-            )
-        )
+def prepare_modality(name):
 
-    except FileNotFoundError:
-
-        pass
-
-    try:
-
-        sources.append(
-            baseline_only(
-                read_prefix(
-                    "UCSFFSX7_"
-                )
-            )
-        )
-
-    except FileNotFoundError:
-
-        pass
-
-    if not sources:
-
-        raise RuntimeError(
-            "No MRI table found."
-        )
+    spec = MODALITIES[name]
 
     result = None
 
-    for df in sources:
+    for prefix in spec["prefixes"]:
+
+        try:
+            df = baseline_only(read_prefix(prefix))
+        except FileNotFoundError:
+            continue
 
         df = ensure_rid(df)
 
-        part = pd.DataFrame({
-            "RID": df["RID"]
-        })
+        part = pd.DataFrame({"RID": df["RID"]})
 
         found = 0
 
-        for key in [
-            "eTIV",
-            "nWBV",
-            "ASF"
-        ]:
+        for key in spec["keys"]:
 
-            c = pick(
-                df,
-                key,
-                required=False
-            )
+            c = pick(df, key, required=False)
 
             if c is not None:
-
-                part[key] = pd.to_numeric(
-                    df[c],
-                    errors="coerce"
-                )
-
+                part[key] = pd.to_numeric(df[c], errors="coerce")
                 found += 1
 
-        if found:
+        if not found:
+            continue
 
-            part = part.drop_duplicates(
-                "RID"
-            )
+        part = part.drop_duplicates("RID")
 
-            if result is None:
-
-                result = part
-
-            else:
-
-                result = result.merge(
-                    part,
-                    on="RID",
-                    how="outer"
-                )
+        if result is None:
+            result = part
+        else:
+            overlap = [c for c in part.columns if c in result.columns and c != "RID"]
+            result = result.merge(part.drop(columns=overlap), on="RID", how="outer")
 
     if result is None:
-
         raise RuntimeError(
-            "Stage 3 could not find "
-            "eTIV/nWBV/ASF in the downloaded "
-            "MRI tables."
+            f"No {name} table with any of {spec['keys']} was found "
+            f"(looked for prefixes {spec['prefixes']})."
         )
 
     return result
+
+
+def prepare_mri():
+    return prepare_modality("mri")
 
 
 # ============================================================
@@ -677,27 +703,34 @@ def main(stage):
     )
 
     # --------------------------------------------------------
-    # Stage 3 MRI
+    # Stage 2-4 modalities
     # --------------------------------------------------------
 
-    if stage == "stage3":
+    stage_spec = STAGE_MODALITIES[stage]
 
-        print(
-            "\nLoading MRI variables..."
-        )
+    for name in stage_spec["optional"]:
 
-        mri = prepare_mri()
+        try:
+            part = prepare_modality(name)
+        except RuntimeError as exc:
+            print(f"\nOptional {name} data unavailable: {exc}")
+            continue
 
-        print(
-            f"MRI participants: "
-            f"{mri['RID'].nunique():,}"
-        )
+        print(f"\nOptional {name} participants: {part['RID'].nunique():,}")
 
-        data = data.merge(
-            mri,
-            on="RID",
-            how="inner"
-        )
+        data = data.merge(part, on="RID", how="left")
+
+    if stage_spec["required"]:
+
+        name = stage_spec["required"]
+
+        print(f"\nLoading {name} variables...")
+
+        part = prepare_modality(name)
+
+        print(f"{name} participants: {part['RID'].nunique():,}")
+
+        data = data.merge(part, on="RID", how="inner")
 
     # --------------------------------------------------------
     # Clean target
@@ -726,6 +759,13 @@ def main(stage):
         "eTIV",
         "nWBV",
         "ASF",
+        "ptau217",
+        "ab42_ab40",
+        "nfl",
+        "gfap",
+        "amyloid_centiloid",
+        "amyloid_suvr",
+        "tau_suvr",
     ]
 
     for c in numeric_columns:
@@ -863,10 +903,7 @@ if __name__ == "__main__":
 
     ap.add_argument(
         "--stage",
-        choices=[
-            "stage1",
-            "stage3"
-        ],
+        choices=list(STAGE_MODALITIES),
         required=True
     )
 

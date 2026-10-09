@@ -44,11 +44,36 @@ features:
 
 
   # ----------------------------------------------------------
+  # STAGE 2
+  # Blood-based biomarker refinement.
+  #
+  # Participants who reach Stage 2 have plasma results
+  # (ADNI UPenn Fujirebio/Quanterix table): p-tau217,
+  # Abeta42/40 ratio, NfL and GFAP.
+  # ----------------------------------------------------------
+
+  stage2:
+    numeric:
+      - education
+      - mmse
+      - adas
+      - faq
+      - ptau217
+      - ab42_ab40
+      - nfl
+      - gfap
+
+    categorical:
+      - sex
+
+
+  # ----------------------------------------------------------
   # STAGE 3
   # Post-MRI re-ranking model
   #
-  # Uses the same pre-MRI clinical variables plus MRI-derived
-  # variables when they are actually available.
+  # Stage-1 clinical variables plus MRI-derived variables.
+  # Plasma biomarkers are included when available (left-joined;
+  # missingness is handled by imputation + missing indicators).
   #
   # NOTE:
   # eTIV/nWBV/ASF must be verified in the downloaded MRI
@@ -61,9 +86,42 @@ features:
       - mmse
       - adas
       - faq
+      - ptau217
+      - ab42_ab40
+      - nfl
+      - gfap
       - eTIV
       - nWBV
       - ASF
+
+    categorical:
+      - sex
+
+
+  # ----------------------------------------------------------
+  # STAGE 4
+  # PET-based refinement for the narrowed-down candidates.
+  #
+  # Amyloid PET (Centiloid, summary SUVR) and tau PET
+  # (meta-temporal SUVR), plus all earlier information.
+  # ----------------------------------------------------------
+
+  stage4:
+    numeric:
+      - education
+      - mmse
+      - adas
+      - faq
+      - ptau217
+      - ab42_ab40
+      - nfl
+      - gfap
+      - eTIV
+      - nWBV
+      - ASF
+      - amyloid_centiloid
+      - amyloid_suvr
+      - tau_suvr
 
     categorical:
       - sex
