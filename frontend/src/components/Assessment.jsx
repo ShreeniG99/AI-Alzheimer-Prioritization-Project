@@ -7,6 +7,7 @@ import { PathwayTrace, QualityPanel, ShapChart, UncertaintyPanel } from "./Resul
 const EMPTY = {
   patient_ref: "",
   sex: "2",
+  age: "",
   education: "",
   mmse: "",
   adas: "",
@@ -16,9 +17,9 @@ const EMPTY = {
 };
 
 const NUMERIC_KEYS = [
-  "education", "mmse", "adas", "faq", "sex", "moca", "cdr",
+  "age", "education", "mmse", "adas", "faq", "sex", "moca", "cdr",
   "ptau217", "ab42_ab40", "nfl", "gfap",
-  "eTIV", "nWBV", "ASF",
+  "eTIV", "nWBV", "ASF", "hippocampus_icv",
   "amyloid_centiloid", "amyloid_suvr", "tau_suvr",
 ];
 

@@ -31,14 +31,26 @@ Stage 4  PET imaging         ──► refined risk ──► specialist review
 
 | Stage | Model inputs | ADNI source tables (prefix) |
 |---|---|---|
-| 1 Cognitive screening | education, sex, MMSE, ADAS-Cog 11, FAQ | `PTDEMOG_`, `MMSE_`, `ADAS_`, `FAQ_` |
+| 1 Cognitive screening | age, education, sex, MMSE, ADAS-Cog 11, FAQ | `PTDEMOG_`, `MMSE_`, `ADAS_`, `FAQ_` |
 | 2 Blood biomarkers | Stage 1 + plasma p-tau217, Aβ42/40, NfL, GFAP | `UPENN_PLASMA_FUJIREBIO_QUANTERIX_` |
-| 3 MRI | Stage 1 + eTIV, nWBV, ASF (+ plasma when available) | `All_Subjects_Key_MRI_`, `UCSFFSX7_` |
+| 3 MRI | Stage 1 + eTIV, nWBV, ASF, hippocampal volume/ICV (+ plasma when available) | `UCSFFSX7_` (FreeSurfer 7; measures derived, see below) |
 | 4 PET | Stage 1 + amyloid Centiloid/SUVR, tau SUVR (+ earlier modalities) | `UCBERKELEY_AMY_6MM_`, `UCBERKELEY_TAU_6MM_` |
 
 **Target** (`config.yaml → target.mode: progression_24m`): among participants who are
 cognitively normal or MCI at baseline with ≥ 24 months of follow-up, `1` = dementia
 diagnosis (DXSUM) within 24 months, `0` otherwise.
+
+**Results on ADNI:** see [`docs/RESULTS.md`](docs/RESULTS.md). Stage 1: 1,677
+participants, 128 converters, test ROC-AUC 0.894, and the top-20% tier captures 77% of
+converters. Stage 3: 1,645 participants, test ROC-AUC 0.881. Stages 2 and 4 need plasma
+and PET tables that were not in the current download.
+
+**ADNI-specific handling:**
+- Negative missing codes (`-1`, `-4`) become missing values.
+- Age is derived from `PTDOB`.
+- eTIV/nWBV/ASF/hippocampal volume are computed from FreeSurfer volumes.
+- Each later-stage measurement is the one closest to the baseline date (±180 days).
+- Missingness indicators are off, so incomplete records are not pushed to LOW.
 
 **Leakage control:** CDR is never a model input. It is only an optional routing field
 (a single patient with CDR = 0 is handled as an *early-detection* task). MoCA is

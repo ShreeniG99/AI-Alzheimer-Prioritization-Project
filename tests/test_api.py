@@ -1,6 +1,6 @@
-STAGE1 = {"education": 14, "sex": 2, "mmse": 23, "adas": 20, "faq": 8}
+STAGE1 = {"age": 74, "education": 14, "sex": 2, "mmse": 23, "adas": 20, "faq": 8}
 PLASMA = {"ptau217": 0.9, "ab42_ab40": 0.085, "nfl": 25, "gfap": 160}
-MRI = {"eTIV": 1500, "nWBV": 0.71, "ASF": 1.17}
+MRI = {"eTIV": 1500, "nWBV": 0.71, "ASF": 1.17, "hippocampus_icv": 0.0045}
 PET = {"amyloid_centiloid": 80, "amyloid_suvr": 1.45, "tau_suvr": 1.5}
 
 
@@ -39,7 +39,7 @@ def test_assessment_scores_explains_and_saves(client, admin_headers):
     assert body["prediction"]["priority"] in {"LOW", "MEDIUM", "HIGH"}
     assert body["explanation"]["method"].startswith("SHAP")
     labels = {c["feature"] for c in body["explanation"]["contributions"]}
-    assert {"mmse", "adas", "faq", "education", "sex"} <= labels
+    assert {"age", "mmse", "adas", "faq", "education", "sex"} <= labels
     assert body["data_quality"]["level"] == "GOOD"
     assert body["assessment_id"].startswith("ASM-")
 

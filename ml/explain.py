@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 
 FEATURE_LABELS = {
+    "age": "Age",
     "education": "Education (years)",
     "mmse": "MMSE",
     "adas": "ADAS-Cog 11",
@@ -28,6 +29,7 @@ FEATURE_LABELS = {
     "eTIV": "eTIV",
     "nWBV": "nWBV",
     "ASF": "ASF",
+    "hippocampus_icv": "Hippocampal volume / ICV",
     "amyloid_centiloid": "Amyloid PET (Centiloid)",
     "amyloid_suvr": "Amyloid PET SUVR",
     "tau_suvr": "Tau PET SUVR",

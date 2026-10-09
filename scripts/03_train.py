@@ -75,10 +75,11 @@ def main(stage):
 
     results = []
     fitted = {}
+    missing_indicators = bool(cfg["training"].get("missing_indicators", False))
 
     for name, estimator in make_models(cfg["training"]["random_state"]).items():
         pipe = Pipeline([
-            ("preprocess", build_preprocessor(numeric, categorical)),
+            ("preprocess", build_preprocessor(numeric, categorical, missing_indicators)),
             ("model", estimator),
         ])
         pipe.fit(X_train, y_train)
@@ -121,7 +122,7 @@ def main(stage):
 
     estimator = make_models(cfg["training"]["random_state"])[selected_name]
     final_pipe = Pipeline([
-        ("preprocess", build_preprocessor(numeric, categorical)),
+        ("preprocess", build_preprocessor(numeric, categorical, missing_indicators)),
         ("model", estimator),
     ])
 

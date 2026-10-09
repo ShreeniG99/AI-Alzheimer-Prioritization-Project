@@ -23,8 +23,8 @@ STAGES = ["stage1", "stage2", "stage3", "stage4"]
 STAGE_INFO = {
     "stage1": {
         "name": "Cognitive screening",
-        "description": "Demographics, MMSE, ADAS-Cog and FAQ (pre-MRI).",
-        "modality_features": ["education", "mmse", "adas", "faq", "sex"],
+        "description": "Age, sex, education, MMSE, ADAS-Cog and FAQ (pre-MRI).",
+        "modality_features": ["age", "education", "mmse", "adas", "faq", "sex"],
     },
     "stage2": {
         "name": "Blood-based biomarkers",
@@ -33,8 +33,8 @@ STAGE_INFO = {
     },
     "stage3": {
         "name": "MRI evaluation",
-        "description": "MRI-derived eTIV, nWBV and ASF re-rank patients after imaging.",
-        "modality_features": ["eTIV", "nWBV", "ASF"],
+        "description": "MRI-derived eTIV, nWBV, ASF and hippocampal volume re-rank patients after imaging.",
+        "modality_features": ["eTIV", "nWBV", "ASF", "hippocampus_icv"],
     },
     "stage4": {
         "name": "PET imaging",

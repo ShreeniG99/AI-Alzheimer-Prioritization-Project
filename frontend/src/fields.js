@@ -4,6 +4,7 @@ export const STAGE_FIELDS = {
     title: "Stage 1 · Cognitive screening",
     help: "Demographics and screening tests. Required for every assessment.",
     fields: [
+      { key: "age", label: "Age", help: "Years, 40–110", min: 40, max: 110, step: 1 },
       { key: "education", label: "Education", help: "Years, 0–30", min: 0, max: 30, step: 1 },
       { key: "mmse", label: "MMSE", help: "Score, 0–30", min: 0, max: 30, step: 1 },
       { key: "adas", label: "ADAS-Cog 11", help: "Score, 0–70", min: 0, max: 70, step: "any" },
@@ -27,6 +28,7 @@ export const STAGE_FIELDS = {
       { key: "eTIV", label: "eTIV", help: "cm³", min: 0, step: "any" },
       { key: "nWBV", label: "nWBV", help: "0–1", min: 0, max: 1, step: "any" },
       { key: "ASF", label: "ASF", help: "Atlas scaling factor", min: 0, step: "any" },
+      { key: "hippocampus_icv", label: "Hippocampus / ICV", help: "e.g. 0.0049", min: 0, max: 0.02, step: "any" },
     ],
   },
   stage4: {

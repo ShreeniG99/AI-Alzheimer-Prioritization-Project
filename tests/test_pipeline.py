@@ -53,3 +53,11 @@ def test_bootstrap_artifact_matches_dataset(workspace):
 def test_prioritized_cohort_report(workspace):
     cohort = pd.read_csv(workspace["ALZ_REPORTS_DIR"] / "prioritized_cohort.csv")
     assert cohort["risk_score"].between(0, 1).all()
+
+
+def test_age_derived_and_missing_codes_cleaned(workspace):
+    data = pd.read_csv(workspace["ALZ_PROCESSED_DIR"] / "stage1.csv")
+    assert data["age"].notna().mean() > 0.99
+    assert data["age"].between(40, 110).all()
+    for column in ["education", "faq"]:
+        assert (data[column].dropna() >= 0).all()

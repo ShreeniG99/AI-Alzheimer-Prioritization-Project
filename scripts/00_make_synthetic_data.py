@@ -98,10 +98,22 @@ def simulate(n_subjects: int, seed: int) -> dict:
                        "EXAMDATE": BASE_DATE.strftime("%Y-%m-%d")})
 
     tables = {}
-    tables["PTDEMOG"] = bl.assign(PTGENDER=sex, PTEDUCAT=education)
+    age = np.clip(rng.normal(73, 7, n_subjects), 55, 92)
+    birth = [BASE_DATE - pd.Timedelta(days=int(a * 365.25)) for a in age]
+    ptdemog = bl.assign(
+        PTGENDER=sex,
+        PTEDUCAT=education,
+        PTDOB=[b.strftime("%m/%Y") for b in birth],
+        PTDOBYY=[b.strftime("%Y-01-01") for b in birth],
+    )
+    # ADNI uses negative sentinel codes for missing values; include a few.
+    ptdemog.loc[rng.random(n_subjects) < 0.01, "PTEDUCAT"] = -4
+    tables["PTDEMOG"] = ptdemog
     tables["MMSE"] = bl.assign(MMSCORE=drop_random(pd.Series(mmse), 0.01))
     tables["ADAS"] = bl.assign(TOTSCORE=drop_random(pd.Series(adas), 0.03))
-    tables["FAQ"] = bl.assign(FAQTOTAL=drop_random(pd.Series(faq), 0.03))
+    faq_series = drop_random(pd.Series(faq), 0.03)
+    faq_series[rng.random(n_subjects) < 0.005] = -1
+    tables["FAQ"] = bl.assign(FAQTOTAL=faq_series)
     tables["MOCA"] = bl.assign(MOCA=drop_random(pd.Series(moca), 0.65))
 
     # Not every participant reaches every pathway stage.

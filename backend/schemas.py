@@ -7,9 +7,9 @@ class PatientAssessment(BaseModel):
     """
     Structured patient assessment across the progressive pathway.
 
-    Stage 1 (cognitive screening):  education, sex, mmse, adas, faq
+    Stage 1 (cognitive screening):  age, education, sex, mmse, adas, faq
     Stage 2 (blood biomarkers):     ptau217, ab42_ab40, nfl, gfap
-    Stage 3 (MRI):                  eTIV, nWBV, ASF
+    Stage 3 (MRI):                  eTIV, nWBV, ASF, hippocampus_icv
     Stage 4 (PET):                  amyloid_centiloid, amyloid_suvr, tau_suvr
 
     Contextual only (never model inputs): moca, cdr.
@@ -21,6 +21,7 @@ class PatientAssessment(BaseModel):
     patient_ref: str = Field(default="anonymous", min_length=1, max_length=100)
 
     # Stage 1
+    age: Optional[float] = Field(default=None, ge=40, le=110, description="Age in years at assessment.")
     education: Optional[float] = Field(default=None, ge=0, le=30, description="Years of education.")
     sex: Optional[float] = Field(default=None, description="ADNI coding: 1=Male, 2=Female.")
     mmse: Optional[float] = Field(default=None, ge=0, le=30, description="MMSE total score.")
@@ -37,6 +38,10 @@ class PatientAssessment(BaseModel):
     eTIV: Optional[float] = Field(default=None, ge=0, description="Estimated total intracranial volume (cm³).")
     nWBV: Optional[float] = Field(default=None, ge=0, le=1, description="Normalized whole-brain volume.")
     ASF: Optional[float] = Field(default=None, ge=0, description="Atlas scaling factor.")
+    hippocampus_icv: Optional[float] = Field(
+        default=None, ge=0, le=0.02,
+        description="Total hippocampal volume / intracranial volume (FreeSurfer).",
+    )
 
     # Stage 4
     amyloid_centiloid: Optional[float] = Field(default=None, ge=-100, le=300, description="Amyloid PET Centiloid.")
