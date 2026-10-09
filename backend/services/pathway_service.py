@@ -34,10 +34,10 @@ def next_step(stage: str, priority: str) -> Dict[str, Any]:
 
     if priority == "HIGH":
         if following:
-            action = f"Prioritise for Stage {index + 2}: {following_name.lower()}"
+            action = f"Prioritise for Stage {index + 2}: {following_name}"
             detail = (
                 f"Highest priority tier at {STAGE_INFO[stage]['name'].lower()}. Subject to clinician "
-                f"review, local protocol and capacity, schedule {following_name.lower()} and enter "
+                f"review, local protocol and capacity, schedule Stage {index + 2} ({following_name}) and enter "
                 "the results to refine the score."
             )
         else:
@@ -50,7 +50,7 @@ def next_step(stage: str, priority: str) -> Dict[str, Any]:
         action = "Clinician review"
         detail = (
             "Intermediate priority. Review with the clinical team"
-            + (f" and consider {following_name.lower()} if capacity allows." if following else ".")
+            + (f" and consider Stage {index + 2} ({following_name}) if capacity allows." if following else ".")
         )
     else:
         action = "Routine pathway"
