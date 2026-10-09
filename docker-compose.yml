@@ -23,15 +23,23 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+psycopg://alzheimer:${POSTGRES_PASSWORD:-change-this-password}@postgres:5432/alzheimer
-      MODEL_STAGE: ${MODEL_STAGE:-stage1}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-480}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
     depends_on:
       postgres:
         condition: service_healthy
     ports:
       - "8000:8000"
     volumes:
+      # Trained models, reports and the processed cohort (used for bootstrap
+      # uncertainty) contain ADNI-derived data: mounted read-only, never baked
+      # into the image.
       - ./artifacts:/app/artifacts:ro
       - ./reports:/app/reports:ro
+      - ./data/processed:/app/data/processed:ro
 
   frontend:
     build:

@@ -15,3 +15,9 @@ backend_phase4_backup/
 scripts_phase4_backup/
 *.zip
 *.log
+data/
+artifacts/
+app.db
+.env
+tests/
+.github/
