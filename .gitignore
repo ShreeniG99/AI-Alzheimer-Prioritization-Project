@@ -22,3 +22,4 @@ artifacts/*.npz
 # Local frontend backup
 frontend/src/*_backup.*data/raw_synthetic/
 .venv/
+app.db
