@@ -1,10 +1,16 @@
 from pathlib import Path
 import os
 import re
+import sys
 import pandas as pd
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# Saved model bundles reference ml.model_utils (e.g. PlattCalibrator), so the
+# project root must be importable when any script unpickles them.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 def load_config():
     with open(ROOT / "config.yaml", "r", encoding="utf-8") as f:

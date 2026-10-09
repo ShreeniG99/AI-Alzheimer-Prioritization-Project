@@ -4,19 +4,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+from common import artifacts_dir, processed_dir, reports_dir
 
-DATA_PATH = (
-    PROJECT_ROOT
-    / "data"
-    / "processed"
-    / "stage1.csv"
-)
+DATA_PATH = processed_dir() / "stage1.csv"
 
-REPORTS_DIR = (
-    PROJECT_ROOT
-    / "reports"
-)
+REPORTS_DIR = reports_dir()
 
 REPORTS_DIR.mkdir(
     parents=True,
