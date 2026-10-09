@@ -4,6 +4,11 @@ data:
   artifacts_dir: artifacts
   reports_dir: reports
 
+  # Later-stage measurements (MRI, plasma, PET) are matched to the
+  # participant's baseline diagnosis date: the closest measurement within
+  # this many days is used; later scans are never used as baseline inputs.
+  modality_window_days: 180
+
 
 # ============================================================
 # FEATURES
@@ -28,12 +33,16 @@ features:
   # because it is 69.41% missing in the final 24-month cohort
   # and 96.9% missing among the positive cases.
   #
-  # Age and SES are excluded because they are 100% missing
-  # in the constructed cohort.
+  # Age is derived from PTDOB (date of birth) and the baseline
+  # diagnosis date, since ADNI PTDEMOG has no AGE column.
+  # SES is excluded because it is not collected in ADNI PTDEMOG.
+  #
+  # ADNI missing codes (-1, -4) are converted to NaN.
   # ----------------------------------------------------------
 
   stage1:
     numeric:
+      - age
       - education
       - mmse
       - adas
@@ -44,11 +53,41 @@ features:
 
 
   # ----------------------------------------------------------
+  # STAGE 2
+  # Blood-based biomarker refinement.
+  #
+  # Participants who reach Stage 2 have plasma results
+  # (ADNI UPenn Fujirebio/Quanterix table): p-tau217,
+  # Abeta42/40 ratio, NfL and GFAP.
+  # ----------------------------------------------------------
+
+  stage2:
+    numeric:
+      - age
+      - education
+      - mmse
+      - adas
+      - faq
+      - ptau217
+      - ab42_ab40
+      - nfl
+      - gfap
+
+    categorical:
+      - sex
+
+
+  # ----------------------------------------------------------
   # STAGE 3
   # Post-MRI re-ranking model
   #
-  # Uses the same pre-MRI clinical variables plus MRI-derived
-  # variables when they are actually available.
+  # Stage-1 clinical variables plus MRI-derived variables.
+  # ADNI has no OASIS eTIV/nWBV/ASF columns; they are derived from the
+  # FreeSurfer table (UCSFFSX7): eTIV = intracranial volume, nWBV =
+  # whole-brain volume / ICV, ASF = 1755 / eTIV, plus hippocampal
+  # volume / ICV (hippocampus_icv).
+  # Plasma biomarkers are included when available (left-joined;
+  # missingness is handled by imputation + missing indicators).
   #
   # NOTE:
   # eTIV/nWBV/ASF must be verified in the downloaded MRI
@@ -57,13 +96,50 @@ features:
 
   stage3:
     numeric:
+      - age
       - education
       - mmse
       - adas
       - faq
+      - ptau217
+      - ab42_ab40
+      - nfl
+      - gfap
       - eTIV
       - nWBV
       - ASF
+      - hippocampus_icv
+
+    categorical:
+      - sex
+
+
+  # ----------------------------------------------------------
+  # STAGE 4
+  # PET-based refinement for the narrowed-down candidates.
+  #
+  # Amyloid PET (Centiloid, summary SUVR) and tau PET
+  # (meta-temporal SUVR), plus all earlier information.
+  # ----------------------------------------------------------
+
+  stage4:
+    numeric:
+      - age
+      - education
+      - mmse
+      - adas
+      - faq
+      - ptau217
+      - ab42_ab40
+      - nfl
+      - gfap
+      - eTIV
+      - nWBV
+      - ASF
+      - hippocampus_icv
+      - amyloid_centiloid
+      - amyloid_suvr
+      - tau_suvr
 
     categorical:
       - sex
@@ -116,6 +192,12 @@ training:
   validation_size: 0.20
 
   random_state: 42
+
+  # Add "was missing" indicator features during imputation.
+  # Off: with very few missing values the indicator learns spurious
+  # rules (in ADNI, missing ADAS/FAQ -> low risk), which would push
+  # patients with incomplete records down the queue.
+  missing_indicators: false
 
   # Evaluate how many positive cases are captured when
   # prioritizing the top 20% of participants by predicted risk.

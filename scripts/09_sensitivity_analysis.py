@@ -51,25 +51,13 @@ import pandas as pd
 # Paths
 # ---------------------------------------------------------------------
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+from common import artifacts_dir, processed_dir, reports_dir
 
-MODEL_PATH = (
-    PROJECT_ROOT
-    / "artifacts"
-    / "stage1_model.joblib"
-)
+MODEL_PATH = artifacts_dir() / "stage1_model.joblib"
 
-DATA_PATH = (
-    PROJECT_ROOT
-    / "data"
-    / "processed"
-    / "stage1.csv"
-)
+DATA_PATH = processed_dir() / "stage1.csv"
 
-REPORTS_DIR = (
-    PROJECT_ROOT
-    / "reports"
-)
+REPORTS_DIR = reports_dir()
 
 REPORTS_DIR.mkdir(
     parents=True,
@@ -97,6 +85,7 @@ PLOT_PATH = (
 # ---------------------------------------------------------------------
 
 FEATURES = [
+    "age",
     "education",
     "mmse",
     "adas",
@@ -105,6 +94,7 @@ FEATURES = [
 ]
 
 NUMERIC_FEATURES = [
+    "age",
     "education",
     "mmse",
     "adas",
@@ -122,6 +112,7 @@ CATEGORICAL_FEATURES = [
 # feature ranges and are used only to demonstrate model behavior.
 
 REFERENCE_PROFILE = {
+    "age": 72.0,
     "education": 16.0,
     "mmse": 28.0,
     "adas": 10.67,
@@ -163,6 +154,17 @@ FAQ_VALUES = [
     15.0,
     20.0,
     30.0,
+]
+
+# Age at baseline (years); ADNI cohort range is roughly 55-91.
+AGE_VALUES = [
+    60.0,
+    65.0,
+    70.0,
+    75.0,
+    80.0,
+    85.0,
+    90.0,
 ]
 
 # Education: ADNI PTEDUCAT is coded 0-20.
@@ -379,6 +381,7 @@ def build_sensitivity_profiles() -> List[Dict[str, Any]]:
     profiles = []
 
     feature_values = {
+        "age": AGE_VALUES,
         "education": EDUCATION_VALUES,
         "mmse": MMSE_VALUES,
         "adas": ADAS_VALUES,
@@ -492,6 +495,9 @@ def evaluate_profiles(
                 ],
                 "input_value": profile_record[
                     "input_value"
+                ],
+                "age": profile[
+                    "age"
                 ],
                 "education": profile[
                     "education"

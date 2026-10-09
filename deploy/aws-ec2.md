@@ -33,18 +33,31 @@ git clone YOUR_PRIVATE_REPOSITORY_URL
 cd AI_Alzheimer_Prioritization_Project
 ```
 
-Copy your trained `artifacts/stage1_model.joblib` and metadata files to the server.
+Copy the trained outputs to the server (e.g. with `scp`), keeping the same folders:
 
-Never commit ADNI subject-level data to a public repository.
+- `artifacts/` (`<stage>_model.joblib`, `<stage>_metadata.json`, `stage1_bootstrap_predictions.npz`)
+- `reports/prioritized_cohort.csv`
+- `data/processed/stage1.csv` (needed for bootstrap uncertainty)
+
+These contain ADNI-derived subject-level data. Keep them off public repositories,
+restrict file permissions (`chmod -R go-rwx artifacts reports data`), and use an
+encrypted EBS volume.
 
 ## 4. Configure secret
 
-Create `.env`:
+Create `.env` from `.env.example`:
 
 ```env
 POSTGRES_PASSWORD=use-a-long-random-secret
-MODEL_STAGE=stage1
+JWT_SECRET=use-another-long-random-secret
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=use-a-strong-initial-password
+CORS_ORIGINS=http://SERVER_PUBLIC_IP:3000
 ```
+
+Generate secrets with `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`.
+The admin account is created on first start. Sign in, then create clinician accounts
+(`POST /auth/users` or `docker compose exec backend python -m backend.init_db --create-user NAME`).
 
 ## 5. Start
 
@@ -57,6 +70,7 @@ docker compose ps
 
 ```bash
 curl http://SERVER_PUBLIC_IP:8000/health
+# {"status":"ok","available_stages":["stage1", ...]}
 ```
 
 Open the frontend:
@@ -71,9 +85,9 @@ For institutional use:
 - IAM least privilege
 - CloudWatch logs/metrics
 - encrypted EBS and database backups
-- audit logging
-- no PHI in frontend logs
-- authentication/authorization
+- ship the audit log (`audit_log` table) to central, append-only storage
+- no PHI in frontend logs; patient references should be pseudonymous
+- SSO / MFA in front of the built-in JWT login
 - vulnerability scanning
 - model versioning
 - dataset/version provenance

@@ -17,13 +17,20 @@ try:
 except Exception:
     XGBClassifier = None
 
-def build_preprocessor(numeric, categorical):
+def build_preprocessor(numeric, categorical, missing_indicators=False):
+    """Median/mode imputation, scaling and one-hot encoding.
+
+    Missingness indicators are off by default: in the ADNI cohort the few
+    records with a missing ADAS/FAQ contained no converters, so an indicator
+    learned "missing -> low risk" and pushed incomplete records to LOW
+    priority. Imputing without an indicator keeps them at a neutral value.
+    """
     transformers = []
     if numeric:
         transformers.append((
             "num",
             Pipeline([
-                ("imputer", SimpleImputer(strategy="median", add_indicator=True)),
+                ("imputer", SimpleImputer(strategy="median", add_indicator=missing_indicators)),
                 ("scaler", StandardScaler()),
             ]),
             numeric,

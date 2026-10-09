@@ -18,8 +18,13 @@ from common import (
 # ============================================================
 
 ALIASES = {
-    # Not currently confirmed in your PTDEMOG download.
+    # ADNI PTDEMOG has no AGE column; age at baseline is derived from
+    # date of birth (PTDOB "MM/YYYY", or PTDOBYY) and the baseline date.
     "age": ["AGE", "PTAGE", "Age"],
+
+    "dob": ["PTDOB"],
+
+    "dob_year": ["PTDOBYY"],
 
     "sex": [
         "PTGENDER",
@@ -96,6 +101,57 @@ ALIASES = {
         "AtlasScalingFactor",
     ],
 
+    "hippocampus_icv": [
+        "HIPPOCAMPUS_ICV",
+        "hippocampus_icv",
+    ],
+
+    # Stage 2 plasma biomarkers (ADNI UPenn Fujirebio/Quanterix table).
+    "ptau217": [
+        "pT217_F",
+        "PTAU217",
+        "PT217",
+        "pTau217",
+    ],
+
+    "ab42_ab40": [
+        "AB42_AB40_F",
+        "AB42AB40",
+        "AB4240",
+        "ABETA42_40",
+    ],
+
+    "nfl": [
+        "NfL_Q",
+        "NFL",
+        "PLASMA_NFL",
+    ],
+
+    "gfap": [
+        "GFAP_Q",
+        "GFAP",
+        "PLASMA_GFAP",
+    ],
+
+    # Stage 4 PET (ADNI UC Berkeley amyloid/tau summary tables).
+    "amyloid_centiloid": [
+        "CENTILOIDS",
+        "CENTILOID",
+        "AMYLOID_CENTILOID",
+    ],
+
+    "amyloid_suvr": [
+        "SUMMARY_SUVR",
+        "SUVR",
+        "AMYLOID_SUVR",
+    ],
+
+    "tau_suvr": [
+        "META_TEMPORAL_SUVR",
+        "TAU_SUVR",
+        "METATEMPORAL_SUVR",
+    ],
+
     "dx": [
         "DX",
         "DXCURREN",
@@ -127,6 +183,66 @@ def get_feature(df, key):
     return df[c]
 
 
+# ADNI encodes "not done / not applicable" with negative sentinel codes
+# (e.g. -1, -4). They must never reach the model as real values.
+ADNI_MISSING_CODES = [-1, -4, -9]
+
+# Plausible ranges; values outside are treated as missing.
+VALID_RANGES = {
+    "age": (40, 110),
+    "education": (0, 30),
+    "mmse": (0, 30),
+    "moca": (0, 30),
+    "adas": (0, 70),
+    "faq": (0, 30),
+    "eTIV": (900, 2300),
+    "nWBV": (0.5, 0.95),
+    "ASF": (0.7, 2.0),
+    "hippocampus_icv": (0.001, 0.01),
+}
+
+
+def clean_clinical_values(data):
+    """Replace ADNI sentinel codes and implausible values with NaN."""
+    for column in data.columns:
+        if column in ("RID", "target"):
+            continue
+        numeric = pd.to_numeric(data[column], errors="coerce")
+        if numeric.notna().sum() == 0:
+            continue
+        sentinel = numeric.isin(ADNI_MISSING_CODES)
+        if sentinel.any():
+            print(f"{column}: {int(sentinel.sum())} ADNI missing-code value(s) set to NaN")
+        data.loc[sentinel, column] = np.nan
+        if column in VALID_RANGES:
+            low, high = VALID_RANGES[column]
+            numeric = pd.to_numeric(data[column], errors="coerce")
+            outside = numeric.notna() & ~numeric.between(low, high)
+            if outside.any():
+                print(f"{column}: {int(outside.sum())} implausible value(s) set to NaN")
+            data.loc[outside, column] = np.nan
+    # ASF is derived from eTIV; drop it whenever eTIV was rejected.
+    if "eTIV" in data.columns and "ASF" in data.columns:
+        data.loc[data["eTIV"].isna(), "ASF"] = np.nan
+    return data
+
+
+def parse_dob(df):
+    """Date of birth from PTDOB ("MM/YYYY") or PTDOBYY (year or date)."""
+    dob = pd.Series(pd.NaT, index=df.index)
+    c = pick(df, "dob")
+    if c is not None:
+        dob = pd.to_datetime(df[c].astype(str), format="%m/%Y", errors="coerce")
+    c = pick(df, "dob_year")
+    if c is not None:
+        raw = df[c].astype(str).str.strip()
+        year_only = pd.to_datetime(raw, format="%Y", errors="coerce")
+        full = pd.to_datetime(raw, errors="coerce")
+        # mid-year when only the year is known
+        dob = dob.fillna(full).fillna(year_only + pd.Timedelta(days=182))
+    return dob
+
+
 # ============================================================
 # BASELINE DEMOGRAPHICS
 # ============================================================
@@ -152,6 +268,8 @@ def prepare_static_demographics():
             out[key] = s.values
         else:
             out[key] = np.nan
+
+    out["_dob"] = parse_dob(df).values
 
     return out.drop_duplicates("RID")
 
@@ -239,107 +357,163 @@ def prepare_cognitive():
 
 
 # ============================================================
-# MRI VARIABLES — STAGE 3
+# LATER-STAGE MODALITIES — STAGES 2, 3 AND 4
 # ============================================================
 
-def prepare_mri():
+# Each pathway stage adds one modality. A modality may be spread over
+# several ADNI tables (e.g. amyloid and tau PET); all matching tables are
+# merged on RID.
+MODALITIES = {
+    "plasma": {
+        "prefixes": ["UPENN_PLASMA_FUJIREBIO_QUANTERIX_", "PLASMA_"],
+        "keys": ["ptau217", "ab42_ab40", "nfl", "gfap"],
+    },
+    "mri": {
+        "prefixes": ["All_Subjects_Key_MRI_", "UCSFFSX7_"],
+        "keys": ["eTIV", "nWBV", "ASF", "hippocampus_icv"],
+    },
+    "pet": {
+        "prefixes": ["UCBERKELEY_AMY_6MM_", "UCBERKELEY_TAU_6MM_"],
+        "keys": ["amyloid_centiloid", "amyloid_suvr", "tau_suvr"],
+    },
+}
 
-    sources = []
+# Modality that a participant must have to be included at each stage.
+# Earlier optional modalities are left-joined (missing values are handled
+# by the model's imputation + missingness indicators).
+STAGE_MODALITIES = {
+    "stage1": {"required": None, "optional": []},
+    "stage2": {"required": "plasma", "optional": []},
+    "stage3": {"required": "mri", "optional": ["plasma"]},
+    "stage4": {"required": "pet", "optional": ["plasma", "mri"]},
+}
 
-    try:
 
-        sources.append(
-            baseline_only(
-                read_prefix(
-                    "All_Subjects_Key_MRI_"
-                )
-            )
-        )
+# FreeSurfer (UCSFFSX*) codes from the ADNI data dictionary.
+FS_ICV = "ST10CV"
+FS_HIPPOCAMPUS = ["ST29SV", "ST88SV"]
+# FreeSurfer 7 summary volumes: total gray matter (cortical + subcortical +
+# cerebellar GM), cerebral white matter, cerebellar WM L/R, brainstem.
+FS7_BRAIN = ["ST154SV", "ST152SV", "ST18SV", "ST77SV", "ST1SV"]
+# Older FreeSurfer tables: sum of the individual structures.
+FS_BRAIN = [
+    "ST19SV", "ST78SV",   # cerebral cortex L/R (cortical gray matter)
+    "ST20SV", "ST79SV",   # cerebral white matter L/R
+    "ST17SV", "ST76SV",   # cerebellum cortex L/R
+    "ST18SV", "ST77SV",   # cerebellum white matter L/R
+    "ST1SV",              # brainstem
+    "ST61SV", "ST120SV",  # thalamus
+    "ST16SV", "ST75SV",   # caudate
+    "ST53SV", "ST112SV",  # putamen
+    "ST42SV", "ST101SV",  # pallidum
+    "ST29SV", "ST88SV",   # hippocampus
+    "ST12SV", "ST71SV",   # amygdala
+    "ST11SV", "ST70SV",   # accumbens
+    "ST65SV", "ST124SV",  # ventral DC
+]
 
-    except FileNotFoundError:
 
-        pass
+def derive_freesurfer(df):
+    """OASIS-style MRI measures from ADNI FreeSurfer volumes (mm^3).
 
-    try:
+    eTIV  = intracranial volume (cm^3)
+    nWBV  = whole-brain tissue volume / intracranial volume
+    ASF   = 1755 / eTIV  (atlas scaling factor, Buckner et al. 2004)
+    hippocampus_icv = (left + right hippocampus) / intracranial volume
+    """
+    if FS_ICV not in df.columns:
+        return None
+    if "OVERALLQC" in df.columns:
+        df = df[df["OVERALLQC"].astype(str).str.lower() != "fail"]
+    icv = pd.to_numeric(df[FS_ICV], errors="coerce")
+    out = pd.DataFrame({"RID": df["RID"], "eTIV": icv / 1000.0})
+    out["ASF"] = 1755.0 / out["eTIV"]
+    for components in (FS7_BRAIN, FS_BRAIN):
+        if all(c in df.columns for c in components):
+            brain = df[components].apply(pd.to_numeric, errors="coerce").sum(axis=1, min_count=len(components))
+            out["nWBV"] = brain / icv
+            break
+    if all(c in df.columns for c in FS_HIPPOCAMPUS):
+        hippocampus = df[FS_HIPPOCAMPUS].apply(pd.to_numeric, errors="coerce").sum(axis=1, min_count=2)
+        out["hippocampus_icv"] = hippocampus / icv
+    return out
 
-        sources.append(
-            baseline_only(
-                read_prefix(
-                    "UCSFFSX7_"
-                )
-            )
-        )
 
-    except FileNotFoundError:
+def nearest_to_baseline(part, dates, baseline_dates, window_days):
+    """Keep, per participant, the measurement closest to the baseline date
+    within +/- window_days (avoids using scans from years later)."""
+    part = part.assign(_date=pd.to_datetime(dates, errors="coerce").values)
+    part = part.merge(baseline_dates, on="RID", how="inner").dropna(subset=["_date"])
+    part["_delta"] = (part["_date"] - part["baseline_date"]).dt.days.abs()
+    part = part[part["_delta"] <= window_days]
+    part = part.sort_values(["RID", "_delta"]).drop_duplicates("RID")
+    return part.drop(columns=["_date", "_delta", "baseline_date"])
 
-        pass
 
-    if not sources:
+def prepare_modality(name, baseline_dates=None, window_days=180):
 
-        raise RuntimeError(
-            "No MRI table found."
-        )
+    spec = MODALITIES[name]
 
     result = None
 
-    for df in sources:
+    for prefix in spec["prefixes"]:
 
-        df = ensure_rid(df)
+        try:
+            raw = ensure_rid(read_prefix(prefix))
+        except FileNotFoundError:
+            continue
 
-        part = pd.DataFrame({
-            "RID": df["RID"]
-        })
+        date_col = find_column(raw, ["EXAMDATE", "SCANDATE", "VISDATE", "EXAMDATE2", "USERDATE"], required=False)
+        aligned = baseline_dates is not None and date_col is not None
+        df = raw if aligned else baseline_only(raw)
+
+        part = pd.DataFrame({"RID": df["RID"]})
 
         found = 0
 
-        for key in [
-            "eTIV",
-            "nWBV",
-            "ASF"
-        ]:
+        for key in spec["keys"]:
 
-            c = pick(
-                df,
-                key,
-                required=False
-            )
+            c = pick(df, key, required=False)
 
             if c is not None:
-
-                part[key] = pd.to_numeric(
-                    df[c],
-                    errors="coerce"
-                )
-
+                part[key] = pd.to_numeric(df[c], errors="coerce")
                 found += 1
 
-        if found:
+        if not found and name == "mri":
+            derived = derive_freesurfer(df)
+            if derived is not None:
+                print(f"{prefix}: deriving eTIV/nWBV/ASF/hippocampus_icv from FreeSurfer volumes")
+                part = derived
+                df = df.loc[derived.index]
+                found = len(derived.columns) - 1
 
-            part = part.drop_duplicates(
-                "RID"
-            )
+        if not found:
+            continue
 
-            if result is None:
+        if aligned:
+            part = nearest_to_baseline(part, df[date_col], baseline_dates, window_days)
+            print(f"{prefix}: {part['RID'].nunique():,} participants with a measurement "
+                  f"within {window_days} days of baseline")
+        else:
+            part = part.drop_duplicates("RID")
 
-                result = part
-
-            else:
-
-                result = result.merge(
-                    part,
-                    on="RID",
-                    how="outer"
-                )
+        if result is None:
+            result = part
+        else:
+            overlap = [c for c in part.columns if c in result.columns and c != "RID"]
+            result = result.merge(part.drop(columns=overlap), on="RID", how="outer")
 
     if result is None:
-
         raise RuntimeError(
-            "Stage 3 could not find "
-            "eTIV/nWBV/ASF in the downloaded "
-            "MRI tables."
+            f"No {name} table with any of {spec['keys']} was found "
+            f"(looked for prefixes {spec['prefixes']})."
         )
 
     return result
+
+
+def prepare_mri(baseline_dates=None, window_days=180):
+    return prepare_modality("mri", baseline_dates, window_days)
 
 
 # ============================================================
@@ -435,9 +609,12 @@ def prepare_target():
             numeric_dx == 3
         ] = 1
 
+        datecol = find_column(df, ["EXAMDATE", "EXAMDATE2", "USERDATE"], required=False)
+
         return pd.DataFrame({
             "RID": df["RID"],
-            "target": target
+            "target": target,
+            "baseline_date": pd.to_datetime(df[datecol], errors="coerce") if datecol else pd.NaT,
         }).drop_duplicates("RID")
 
 
@@ -586,7 +763,8 @@ def prepare_target():
         out = baseline[
             [
                 "RID",
-                "target"
+                "target",
+                "baseline_date",
             ]
         ].copy()
 
@@ -677,27 +855,37 @@ def main(stage):
     )
 
     # --------------------------------------------------------
-    # Stage 3 MRI
+    # Stage 2-4 modalities
     # --------------------------------------------------------
 
-    if stage == "stage3":
+    stage_spec = STAGE_MODALITIES[stage]
 
-        print(
-            "\nLoading MRI variables..."
-        )
+    baseline_dates = data[["RID", "baseline_date"]].dropna()
+    window_days = int(cfg["data"].get("modality_window_days", 180))
 
-        mri = prepare_mri()
+    for name in stage_spec["optional"]:
 
-        print(
-            f"MRI participants: "
-            f"{mri['RID'].nunique():,}"
-        )
+        try:
+            part = prepare_modality(name, baseline_dates, window_days)
+        except RuntimeError as exc:
+            print(f"\nOptional {name} data unavailable: {exc}")
+            continue
 
-        data = data.merge(
-            mri,
-            on="RID",
-            how="inner"
-        )
+        print(f"\nOptional {name} participants: {part['RID'].nunique():,}")
+
+        data = data.merge(part, on="RID", how="left")
+
+    if stage_spec["required"]:
+
+        name = stage_spec["required"]
+
+        print(f"\nLoading {name} variables...")
+
+        part = prepare_modality(name, baseline_dates, window_days)
+
+        print(f"{name} participants: {part['RID'].nunique():,}")
+
+        data = data.merge(part, on="RID", how="inner")
 
     # --------------------------------------------------------
     # Clean target
@@ -713,6 +901,20 @@ def main(stage):
     )
 
     # --------------------------------------------------------
+    # Age at baseline (derived when no AGE column exists)
+    # --------------------------------------------------------
+
+    derived_age = (data["baseline_date"] - data["_dob"]).dt.days / 365.25
+    data["age"] = pd.to_numeric(data["age"], errors="coerce").fillna(derived_age).round(1)
+    data = data.drop(columns=["_dob", "baseline_date"])
+
+    # --------------------------------------------------------
+    # ADNI missing codes / implausible values -> NaN
+    # --------------------------------------------------------
+
+    data = clean_clinical_values(data)
+
+    # --------------------------------------------------------
     # Numeric conversion
     # --------------------------------------------------------
 
@@ -726,6 +928,14 @@ def main(stage):
         "eTIV",
         "nWBV",
         "ASF",
+        "hippocampus_icv",
+        "ptau217",
+        "ab42_ab40",
+        "nfl",
+        "gfap",
+        "amyloid_centiloid",
+        "amyloid_suvr",
+        "tau_suvr",
     ]
 
     for c in numeric_columns:
@@ -863,10 +1073,7 @@ if __name__ == "__main__":
 
     ap.add_argument(
         "--stage",
-        choices=[
-            "stage1",
-            "stage3"
-        ],
+        choices=list(STAGE_MODALITIES),
         required=True
     )
 

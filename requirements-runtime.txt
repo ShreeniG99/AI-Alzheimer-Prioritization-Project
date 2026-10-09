@@ -9,3 +9,6 @@ pydantic==2.10.4
 SQLAlchemy==2.0.36
 psycopg[binary]==3.2.3
 python-multipart==0.0.20
+PyJWT==2.10.1
+shap==0.46.0
+xgboost==2.1.3

@@ -21,3 +21,8 @@ artifacts/*.npz
 
 # Local frontend backup
 frontend/src/*_backup.*
+
+# Synthetic demo/test data (scripts/00_make_synthetic_data.py)
+data/raw_synthetic/
+.venv/
+app.db

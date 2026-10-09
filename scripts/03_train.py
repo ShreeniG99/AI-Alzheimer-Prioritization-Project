@@ -1,5 +1,6 @@
 import argparse
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -74,10 +75,11 @@ def main(stage):
 
     results = []
     fitted = {}
+    missing_indicators = bool(cfg["training"].get("missing_indicators", False))
 
     for name, estimator in make_models(cfg["training"]["random_state"]).items():
         pipe = Pipeline([
-            ("preprocess", build_preprocessor(numeric, categorical)),
+            ("preprocess", build_preprocessor(numeric, categorical, missing_indicators)),
             ("model", estimator),
         ])
         pipe.fit(X_train, y_train)
@@ -120,7 +122,7 @@ def main(stage):
 
     estimator = make_models(cfg["training"]["random_state"])[selected_name]
     final_pipe = Pipeline([
-        ("preprocess", build_preprocessor(numeric, categorical)),
+        ("preprocess", build_preprocessor(numeric, categorical, missing_indicators)),
         ("model", estimator),
     ])
 
@@ -142,8 +144,28 @@ def main(stage):
         cfg["priority"]["medium_capacity_fraction"],
     )
 
+    model_version = f"{stage}-{selected_name}-{datetime.now(timezone.utc):%Y%m%d}"
+
+    cohort = {
+        "participants": int(len(df)),
+        "positives": int(y.sum()),
+        "positive_rate": float(y.mean()),
+        "complete_input_fraction": float(X[features].notna().all(axis=1).mean()),
+        "train_rows": int(len(X_train)),
+        "validation_rows": int(len(X_val)),
+        "test_rows": int(len(X_test)),
+    }
+
+    # Small background sample of development data for SHAP explanations.
+    background = X_dev[features].sample(
+        n=min(200, len(X_dev)), random_state=cfg["training"]["random_state"]
+    ).reset_index(drop=True)
+
     bundle = {
         "stage": stage,
+        "model_version": model_version,
+        "cohort": cohort,
+        "background": background,
         "pipeline": final_pipe,
         "calibrator": final_cal,
         "features": features,
@@ -160,7 +182,9 @@ def main(stage):
     metadata = {
         "stage": stage,
         "selected_model": selected_name,
+        "model_version": model_version,
         "features": features,
+        "cohort": cohort,
         "priority_thresholds": thresholds,
         "validation_comparison": comparison.to_dict(orient="records"),
         "untouched_test_metrics": test_metrics,
@@ -203,6 +227,6 @@ def main(stage):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--stage", choices=["stage1","stage3"], required=True)
+    ap.add_argument("--stage", choices=list(load_config()["features"]), required=True)
     args = ap.parse_args()
     main(args.stage)

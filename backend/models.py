@@ -1,57 +1,64 @@
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Any
 
-from sqlalchemy import DateTime, Float, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, Float, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.database import Base
 
 
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    full_name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    password_hash: Mapped[str] = mapped_column(String(300), nullable=False)
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="clinician")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+
 class PatientRecord(Base):
-    __tablename__ = "patient_records"
+    """One patient assessment moving through the progressive diagnostic pathway.
 
-    id: Mapped[int] = mapped_column(
-        Integer,
-        primary_key=True,
-        autoincrement=True,
-    )
+    ``inputs`` holds every submitted model/contextual input (Stage 1-4).
+    ``explanation`` and ``pathway`` store the SHAP reasoning and the stage
+    trace so the score, tier and reasoning are persisted together.
+    """
 
-    assessment_id: Mapped[str] = mapped_column(
-        String(100),
-        unique=True,
-        index=True,
-        nullable=False,
-    )
+    __tablename__ = "patient_assessments"
 
-    patient_ref: Mapped[str] = mapped_column(
-        String(100),
-        index=True,
-        nullable=False,
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    assessment_id: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    patient_ref: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
 
-    education: Mapped[float | None] = mapped_column(Float, nullable=True)
-    mmse: Mapped[float | None] = mapped_column(Float, nullable=True)
-    adas: Mapped[float | None] = mapped_column(Float, nullable=True)
-    faq: Mapped[float | None] = mapped_column(Float, nullable=True)
-    sex: Mapped[float | None] = mapped_column(Float, nullable=True)
-    moca: Mapped[float | None] = mapped_column(Float, nullable=True)
+    inputs: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
-    risk_score: Mapped[float] = mapped_column(
-        Float,
-        nullable=False,
-    )
+    current_stage: Mapped[str] = mapped_column(String(20), nullable=False)
+    risk_score: Mapped[float] = mapped_column(Float, nullable=False)
+    priority: Mapped[str] = mapped_column(String(20), nullable=False)
+    model_version: Mapped[str] = mapped_column(String(100), nullable=False)
 
-    priority: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-    )
+    explanation: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    pathway: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
-    model_version: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
-    )
+    created_by: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        nullable=False,
-    )
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True, nullable=False)
+    username: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
+    action: Mapped[str] = mapped_column(String(50), index=True, nullable=False)
+    resource: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    details: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    ip_address: Mapped[str] = mapped_column(String(64), nullable=False, default="")

@@ -1,331 +1,124 @@
-from pathlib import Path
-from typing import Any, Dict
+"""
+Research uncertainty service.
 
-import joblib
+Bootstrap uncertainty (scripts/08_uncertainty_analysis.py) is available for
+participants represented in the retrospective cohort of a stage. The bootstrap
+artifact contains raw (uncalibrated) probabilities from model refits, so those
+quantities are labelled as raw model probabilities; the production calibrated
+risk is reported separately.
+
+This service does not generate clinical confidence intervals and does not
+extrapolate bootstrap uncertainty to arbitrary new patients.
+"""
+
+import threading
+from typing import Any, Dict, Optional
+
 import numpy as np
 import pandas as pd
 
+from backend.services.model_registry import registry
+from backend.settings import ARTIFACTS_DIR, PROCESSED_DIR
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-MODEL_PATH = PROJECT_ROOT / "artifacts" / "stage1_model.joblib"
-
-BOOTSTRAP_PATH = (
-    PROJECT_ROOT
-    / "artifacts"
-    / "stage1_bootstrap_predictions.npz"
-)
-
-DATA_PATH = (
-    PROJECT_ROOT
-    / "data"
-    / "processed"
-    / "stage1.csv"
-)
+class _StageBootstrap:
+    def __init__(self, stage: str):
+        npz = np.load(ARTIFACTS_DIR / f"{stage}_bootstrap_predictions.npz")
+        self.predictions = npz["predictions"]
+        self.row_indices = npz["row_indices"]
+        self.dataset = pd.read_csv(PROCESSED_DIR / f"{stage}.csv")
+        if len(self.dataset) != len(self.row_indices):
+            raise RuntimeError(
+                "Bootstrap artifact and processed dataset have different numbers of rows; "
+                "re-run scripts/08_uncertainty_analysis.py after retraining."
+            )
 
 
 class UncertaintyService:
-    """
-    Research uncertainty service.
-
-    Bootstrap uncertainty is available for participants represented
-    in the retrospective Stage-1 cohort.
-
-    The bootstrap artifact contains probabilities from uncalibrated
-    logistic-regression refits. Therefore those bootstrap quantities
-    are explicitly labelled as raw model probabilities.
-
-    The production model's calibrated probability is reported
-    separately.
-
-    This service does not generate clinical confidence intervals and
-    does not extrapolate bootstrap uncertainty to arbitrary new
-    patients.
-    """
-
     def __init__(self):
+        self._cache: Dict[str, Optional[_StageBootstrap]] = {}
+        self._lock = threading.Lock()
 
-        if not MODEL_PATH.exists():
-            raise FileNotFoundError(
-                f"Stage-1 model not found: {MODEL_PATH}"
-            )
+    def _bootstrap(self, stage: str) -> Optional[_StageBootstrap]:
+        with self._lock:
+            if stage not in self._cache:
+                npz = ARTIFACTS_DIR / f"{stage}_bootstrap_predictions.npz"
+                data = PROCESSED_DIR / f"{stage}.csv"
+                self._cache[stage] = _StageBootstrap(stage) if npz.exists() and data.exists() else None
+            return self._cache[stage]
 
-        if not BOOTSTRAP_PATH.exists():
-            raise FileNotFoundError(
-                f"Bootstrap artifact not found: {BOOTSTRAP_PATH}"
-            )
-
-        if not DATA_PATH.exists():
-            raise FileNotFoundError(
-                f"Stage-1 dataset not found: {DATA_PATH}"
-            )
-
-        model_artifact = joblib.load(MODEL_PATH)
-
-        self.pipeline = model_artifact["pipeline"]
-
-        self.calibrator = model_artifact["calibrator"]
-
-        self.model_name = model_artifact["selected_model"]
-
-        bootstrap = np.load(BOOTSTRAP_PATH)
-
-        self.bootstrap_predictions = bootstrap["predictions"]
-
-        self.row_indices = bootstrap["row_indices"]
-
-        self.dataset = pd.read_csv(DATA_PATH)
-
-        self.features = [
-            "education",
-            "mmse",
-            "adas",
-            "faq",
-            "sex",
-        ]
-
-        if len(self.dataset) != len(self.row_indices):
-            raise RuntimeError(
-                "Bootstrap artifact and Stage-1 dataset "
-                "have different numbers of rows."
-            )
-
-    def _build_dataframe(
-        self,
-        features: Dict[str, Any],
-    ) -> pd.DataFrame:
-
-        return pd.DataFrame(
-            [
-                {
-                    feature: features.get(feature)
-                    for feature in self.features
-                }
-            ]
-        )
-
-    def _production_calibrated_probability(
-        self,
-        features: Dict[str, Any],
-    ) -> float:
-
-        dataframe = self._build_dataframe(features)
-
-        raw_probability = float(
-            self.pipeline.predict_proba(
-                dataframe
-            )[:, 1][0]
-        )
-
-        calibrated_probability = float(
-            self.calibrator.transform(
-                np.asarray([raw_probability])
-            )[0]
-        )
-
-        return calibrated_probability
-
-    def _find_matching_row(
-        self,
-        features: Dict[str, Any],
-    ):
-        """
-        Find an exact Stage-1 cohort row matching the supplied
-        model inputs.
-
-        Missing values are handled explicitly.
-        """
-
-        candidate = {}
-
-        for feature in self.features:
-
-            value = features.get(feature)
-
-            if value is None:
-                candidate[feature] = np.nan
+    def _find_matching_row(self, dataset: pd.DataFrame, features: Dict[str, Any], model_features):
+        mask = pd.Series(True, index=dataset.index)
+        for feature in model_features:
+            supplied = features.get(feature)
+            column = pd.to_numeric(dataset[feature], errors="coerce")
+            if supplied is None:
+                mask &= column.isna()
             else:
-                candidate[feature] = value
+                mask &= np.isclose(column, float(supplied), equal_nan=False)
+        matches = dataset.index[mask].tolist()
+        return matches[0] if matches else None
 
-        mask = pd.Series(
-            True,
-            index=self.dataset.index,
-        )
+    def estimate(self, features: Dict[str, Any], stage: str = "stage1") -> Dict[str, Any]:
+        model = registry.get(stage)
+        if model is None:
+            return {"available": False, "stage": stage, "reason": f"No {stage} model is deployed."}
 
-        for feature in self.features:
+        production_risk = model.predict(features)["risk_score"]
+        base = {
+            "stage": stage,
+            "production_calibrated_risk": production_risk,
+            "model": model.model_name,
+        }
 
-            supplied = candidate[feature]
-
-            if pd.isna(supplied):
-
-                mask &= self.dataset[
-                    feature
-                ].isna()
-
-            else:
-
-                mask &= np.isclose(
-                    pd.to_numeric(
-                        self.dataset[feature],
-                        errors="coerce",
-                    ),
-                    float(supplied),
-                    equal_nan=False,
-                )
-
-        matches = self.dataset.index[
-            mask
-        ].tolist()
-
-        if not matches:
-            return None
-
-        return matches[0]
-
-    def estimate(
-        self,
-        features: Dict[str, Any],
-    ) -> Dict[str, Any]:
-
-        production_calibrated_risk = (
-            self._production_calibrated_probability(
-                features
-            )
-        )
-
-        row_index = self._find_matching_row(
-            features
-        )
-
-        if row_index is None:
-
+        bootstrap = self._bootstrap(stage)
+        if bootstrap is None:
             return {
+                **base,
                 "available": False,
-                "production_calibrated_risk": (
-                    production_calibrated_risk
-                ),
                 "reason": (
-                    "The submitted assessment does not "
-                    "match a participant row in the "
-                    "retrospective bootstrap cohort. "
-                    "A patient-specific bootstrap interval "
-                    "is therefore not reported."
-                ),
-                "method": (
-                    "500 bootstrap model refits were used "
-                    "for retrospective cohort uncertainty. "
-                    "The bootstrap artifact contains raw "
-                    "model probabilities. No extrapolation "
-                    "is performed for unmatched assessments."
-                ),
-                "model": self.model_name,
-                "interpretation": (
-                    "The production calibrated risk is "
-                    "reported separately from bootstrap raw "
-                    "model probabilities. Research uncertainty "
-                    "only; not a clinical confidence interval."
+                    f"No bootstrap artifact for {stage}. Generate it with "
+                    f"scripts/08_uncertainty_analysis.py --stage {stage}."
                 ),
             }
 
-        matching_positions = np.where(
-            self.row_indices == row_index
-        )[0]
+        row_index = self._find_matching_row(bootstrap.dataset, features, model.features)
+        if row_index is None:
+            return {
+                **base,
+                "available": False,
+                "reason": (
+                    "The submitted assessment does not match a participant row in the "
+                    "retrospective bootstrap cohort. A patient-specific bootstrap interval "
+                    "is therefore not reported."
+                ),
+                "method": "No extrapolation is performed for unmatched assessments.",
+                "interpretation": "Research uncertainty only; not a clinical confidence interval.",
+            }
 
-        if len(matching_positions) == 0:
-            raise RuntimeError(
-                "Matching cohort row was not found in "
-                "the bootstrap artifact."
-            )
-
-        bootstrap_index = int(
-            matching_positions[0]
-        )
-
-        values = self.bootstrap_predictions[
-            :,
-            bootstrap_index
-        ]
-
-        lower = float(
-            np.percentile(
-                values,
-                2.5,
-            )
-        )
-
-        upper = float(
-            np.percentile(
-                values,
-                97.5,
-            )
-        )
-
-        mean_probability = float(
-            np.mean(values)
-        )
-
-        median_probability = float(
-            np.median(values)
-        )
-
-        standard_deviation = float(
-            np.std(
-                values,
-                ddof=1,
-            )
-        )
+        position = np.where(bootstrap.row_indices == row_index)[0]
+        values = bootstrap.predictions[:, int(position[0])]
+        replicates = int(bootstrap.predictions.shape[0])
 
         return {
+            **base,
             "available": True,
             "row_index": int(row_index),
-
-            "production_calibrated_risk": (
-                production_calibrated_risk
-            ),
-
-            "bootstrap_raw_probability_mean": (
-                mean_probability
-            ),
-
-            "bootstrap_raw_probability_median": (
-                median_probability
-            ),
-
-            "bootstrap_raw_probability_lower_95": (
-                lower
-            ),
-
-            "bootstrap_raw_probability_upper_95": (
-                upper
-            ),
-
-            "bootstrap_raw_probability_std": (
-                standard_deviation
-            ),
-
-            "bootstrap_replicates": int(
-                self.bootstrap_predictions.shape[0]
-            ),
-
+            "bootstrap_raw_probability_mean": float(np.mean(values)),
+            "bootstrap_raw_probability_median": float(np.median(values)),
+            "bootstrap_raw_probability_lower_95": float(np.percentile(values, 2.5)),
+            "bootstrap_raw_probability_upper_95": float(np.percentile(values, 97.5)),
+            "bootstrap_raw_probability_std": float(np.std(values, ddof=1)),
+            "bootstrap_replicates": replicates,
             "method": (
-                "Empirical interval from 500 bootstrap "
-                "logistic-regression model refits. "
-                "Bootstrap quantities are raw model "
-                "probabilities and are not the production "
+                f"Empirical interval from {replicates} bootstrap {model.model_name} refits. "
+                "Bootstrap quantities are raw model probabilities and are not the production "
                 "calibrated risk score."
             ),
-
-            "model": self.model_name,
-
             "interpretation": (
-                "The production calibrated risk is reported "
-                "separately from the bootstrap raw model "
-                "probability distribution. The bootstrap "
-                "interval describes empirical model-estimate "
-                "uncertainty in the retrospective research "
-                "cohort. It is not a clinical confidence "
-                "interval and should not be interpreted as "
-                "diagnostic certainty or treatment guidance."
+                "The bootstrap interval describes empirical model-estimate uncertainty in the "
+                "retrospective research cohort. It is not a clinical confidence interval and "
+                "should not be interpreted as diagnostic certainty or treatment guidance."
             ),
         }
 
