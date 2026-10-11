@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { pct, priorityClass } from "../fields";
 
 export function PriorityBadge({ priority }) {
@@ -42,12 +42,17 @@ export function PathwayTrace({ trace, nextStep }) {
 function displayValue(c) {
   if (c.missing) return "missing (imputed)";
   if (c.feature === "sex") return { 1: "Male", 2: "Female" }[c.value] || c.value;
+  if (c.feature.startsWith("hx_")) return { 1: "Yes", 0: "No" }[c.value] ?? c.value;
   return c.value;
 }
 
+const SHAP_TOP_N = 10;
+
 export function ShapChart({ explanation }) {
+  const [showAll, setShowAll] = useState(false);
   if (!explanation) return null;
-  const items = explanation.contributions || [];
+  const all = explanation.contributions || [];
+  const items = showAll ? all : all.slice(0, SHAP_TOP_N);
   const max = Math.max(...items.map((c) => Math.abs(c.shap_value)), 1e-9);
 
   return (
@@ -82,6 +87,11 @@ export function ShapChart({ explanation }) {
           );
         })}
       </div>
+      {all.length > SHAP_TOP_N && (
+        <button type="button" className="link-button" onClick={() => setShowAll((v) => !v)}>
+          {showAll ? `Show top ${SHAP_TOP_N} only` : `Show all ${all.length} inputs`}
+        </button>
+      )}
       <div className="explanation-note">{explanation.interpretation}</div>
     </div>
   );

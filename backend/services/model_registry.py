@@ -23,13 +23,21 @@ STAGES = ["stage1", "stage2", "stage3", "stage4"]
 STAGE_INFO = {
     "stage1": {
         "name": "Cognitive screening",
-        "description": "Age, sex, education, MMSE, ADAS-Cog and FAQ (pre-MRI).",
-        "modality_features": ["age", "education", "mmse", "adas", "faq", "sex"],
+        "description": "Age, sex, education, MMSE, ADAS-Cog, FAQ and baseline comorbidities (pre-MRI).",
+        "modality_features": [
+            "age", "education", "mmse", "adas", "faq", "sex",
+            "bmi", "sbp", "gds", "hx_cardiovascular", "hx_endocrine",
+            "hx_psychiatric", "hx_neurologic", "hx_smoking",
+        ],
+        # Core screening inputs; comorbidities are optional extras.
+        "trigger_features": ["age", "education", "mmse", "adas", "faq", "sex"],
     },
     "stage2": {
         "name": "Blood-based biomarkers",
-        "description": "Plasma p-tau217, Aβ42/40, NfL and GFAP refine the screening score.",
-        "modality_features": ["ptau217", "ab42_ab40", "nfl", "gfap"],
+        "description": "Plasma p-tau217, p-tau181, Aβ42/40, NfL, GFAP and APOE ε4 refine the screening score.",
+        "modality_features": ["ptau217", "ab42_ab40", "nfl", "gfap", "ptau181", "nfl_legacy", "apoe4"],
+        # Genotype alone does not mean the patient has had the blood biomarker test.
+        "trigger_features": ["ptau217", "ab42_ab40", "nfl", "gfap", "ptau181", "nfl_legacy"],
     },
     "stage3": {
         "name": "MRI evaluation",
@@ -38,8 +46,8 @@ STAGE_INFO = {
     },
     "stage4": {
         "name": "PET imaging",
-        "description": "Amyloid (Centiloid, SUVR) and tau PET for the narrowed-down candidates.",
-        "modality_features": ["amyloid_centiloid", "amyloid_suvr", "tau_suvr"],
+        "description": "Amyloid PET (Centiloid) and FDG-PET metabolism for the narrowed-down candidates.",
+        "modality_features": ["amyloid_centiloid", "fdg"],
     },
 }
 
@@ -89,7 +97,7 @@ class StageModel:
     def info(self) -> Dict[str, Any]:
         return {
             "stage": self.stage,
-            **{k: v for k, v in STAGE_INFO[self.stage].items() if k != "modality_features"},
+            **{k: v for k, v in STAGE_INFO[self.stage].items() if not k.endswith("_features")},
             "selected_model": self.model_name,
             "model_version": self.model_version,
             "features": self.features,

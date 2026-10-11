@@ -17,27 +17,14 @@ data:
 features:
 
   # ----------------------------------------------------------
-  # STAGE 1
-  # Pre-MRI clinical prioritization model
+  # STAGE 1 - Cognitive screening (pre-MRI)
   #
-  # These variables are available before MRI acquisition.
-  #
-  # Verified in the downloaded ADNI files:
-  #   PTGENDER -> sex
-  #   PTEDUCAT -> education
-  #   MMSCORE  -> MMSE
-  #   TOTSCORE -> ADAS-11
-  #   FAQTOTAL -> FAQ
-  #
-  # MoCA is intentionally excluded from the primary model
-  # because it is 69.41% missing in the final 24-month cohort
-  # and 96.9% missing among the positive cases.
-  #
-  # Age is derived from PTDOB (date of birth) and the baseline
-  # diagnosis date, since ADNI PTDEMOG has no AGE column.
-  # SES is excluded because it is not collected in ADNI PTDEMOG.
-  #
-  # ADNI missing codes (-1, -4) are converted to NaN.
+  # Demographics, cognitive/functional tests and baseline
+  # comorbidities (architecture slide: "test scores + co-morbidities"):
+  #   age      derived from PTDOB and the baseline diagnosis date
+  #   bmi/sbp  VITALS (units converted), gds = Geriatric Depression Scale
+  #   hx_*     MEDHIST flags (1 = yes)
+  # MoCA is excluded (69% missing; contextual only). CDR is never used.
   # ----------------------------------------------------------
 
   stage1:
@@ -47,18 +34,27 @@ features:
       - mmse
       - adas
       - faq
+      - bmi
+      - sbp
+      - gds
+      - hx_cardiovascular
+      - hx_endocrine
+      - hx_psychiatric
+      - hx_neurologic
+      - hx_smoking
 
     categorical:
       - sex
 
 
   # ----------------------------------------------------------
-  # STAGE 2
-  # Blood-based biomarker refinement.
+  # STAGE 2 - Blood-based biomarkers
   #
-  # Participants who reach Stage 2 have plasma results
-  # (ADNI UPenn Fujirebio/Quanterix table): p-tau217,
-  # Abeta42/40 ratio, NfL and GFAP.
+  # Participants with any plasma biomarker within the baseline window:
+  #   UPENN Fujirebio/Quanterix: ptau217, ab42_ab40, nfl, gfap
+  #   Gothenburg p-tau181 (ptau181), Blennow NfL (nfl_legacy; older
+  #   assay on a different scale, kept separate from nfl)
+  #   apoe4 = number of APOE e4 alleles (APOERES)
   # ----------------------------------------------------------
 
   stage2:
@@ -68,30 +64,31 @@ features:
       - mmse
       - adas
       - faq
+      - bmi
+      - sbp
+      - gds
+      - hx_cardiovascular
+      - hx_endocrine
+      - hx_psychiatric
+      - hx_neurologic
+      - hx_smoking
+      - apoe4
       - ptau217
       - ab42_ab40
       - nfl
       - gfap
+      - ptau181
+      - nfl_legacy
 
     categorical:
       - sex
 
 
   # ----------------------------------------------------------
-  # STAGE 3
-  # Post-MRI re-ranking model
+  # STAGE 3 - MRI evaluation
   #
-  # Stage-1 clinical variables plus MRI-derived variables.
-  # ADNI has no OASIS eTIV/nWBV/ASF columns; they are derived from the
-  # FreeSurfer table (UCSFFSX7): eTIV = intracranial volume, nWBV =
-  # whole-brain volume / ICV, ASF = 1755 / eTIV, plus hippocampal
-  # volume / ICV (hippocampus_icv).
-  # Plasma biomarkers are included when available (left-joined;
-  # missingness is handled by imputation + missing indicators).
-  #
-  # NOTE:
-  # eTIV/nWBV/ASF must be verified in the downloaded MRI
-  # tables before Stage 3 is built/trained.
+  # eTIV / nWBV / ASF / hippocampus_icv derived from FreeSurfer 7
+  # (UCSFFSX7). Blood biomarkers are used when available.
   # ----------------------------------------------------------
 
   stage3:
@@ -101,10 +98,21 @@ features:
       - mmse
       - adas
       - faq
+      - bmi
+      - sbp
+      - gds
+      - hx_cardiovascular
+      - hx_endocrine
+      - hx_psychiatric
+      - hx_neurologic
+      - hx_smoking
+      - apoe4
       - ptau217
       - ab42_ab40
       - nfl
       - gfap
+      - ptau181
+      - nfl_legacy
       - eTIV
       - nWBV
       - ASF
@@ -115,11 +123,13 @@ features:
 
 
   # ----------------------------------------------------------
-  # STAGE 4
-  # PET-based refinement for the narrowed-down candidates.
+  # STAGE 4 - PET imaging
   #
-  # Amyloid PET (Centiloid, summary SUVR) and tau PET
-  # (meta-temporal SUVR), plus all earlier information.
+  #   amyloid_centiloid  UC Berkeley amyloid PET (harmonised across
+  #                      florbetapir / florbetaben / NAV4694 tracers)
+  #   fdg                UC Berkeley FDG-PET MetaROI (glucose metabolism)
+  # Tau PET is not used: only 5 converters had a tau scan near baseline.
+  # Tracer-specific amyloid SUVR is not used (not comparable across tracers).
   # ----------------------------------------------------------
 
   stage4:
@@ -129,17 +139,27 @@ features:
       - mmse
       - adas
       - faq
+      - bmi
+      - sbp
+      - gds
+      - hx_cardiovascular
+      - hx_endocrine
+      - hx_psychiatric
+      - hx_neurologic
+      - hx_smoking
+      - apoe4
       - ptau217
       - ab42_ab40
       - nfl
       - gfap
+      - ptau181
+      - nfl_legacy
       - eTIV
       - nWBV
       - ASF
       - hippocampus_icv
       - amyloid_centiloid
-      - amyloid_suvr
-      - tau_suvr
+      - fdg
 
     categorical:
       - sex

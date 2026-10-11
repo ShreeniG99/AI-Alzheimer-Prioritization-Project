@@ -2,13 +2,21 @@
 export const STAGE_FIELDS = {
   stage1: {
     title: "Stage 1 · Cognitive screening",
-    help: "Demographics and screening tests. Required for every assessment.",
+    help: "Demographics, screening tests and baseline comorbidities. Required for every assessment.",
     fields: [
       { key: "age", label: "Age", help: "Years, 40–110", min: 40, max: 110, step: 1 },
       { key: "education", label: "Education", help: "Years, 0–30", min: 0, max: 30, step: 1 },
       { key: "mmse", label: "MMSE", help: "Score, 0–30", min: 0, max: 30, step: 1 },
       { key: "adas", label: "ADAS-Cog 11", help: "Score, 0–70", min: 0, max: 70, step: "any" },
       { key: "faq", label: "FAQ", help: "Score, 0–30", min: 0, max: 30, step: 1 },
+      { key: "gds", label: "Depression (GDS)", help: "Score, 0–15", min: 0, max: 15, step: 1 },
+      { key: "bmi", label: "BMI", help: "kg/m²", min: 12, max: 60, step: "any" },
+      { key: "sbp", label: "Systolic BP", help: "mmHg", min: 60, max: 260, step: 1 },
+      { key: "hx_cardiovascular", label: "Cardiovascular disease", help: "History", options: [["", "Not recorded"], ["1", "Yes"], ["0", "No"]] },
+      { key: "hx_endocrine", label: "Diabetes / endocrine", help: "History", options: [["", "Not recorded"], ["1", "Yes"], ["0", "No"]] },
+      { key: "hx_psychiatric", label: "Psychiatric", help: "History", options: [["", "Not recorded"], ["1", "Yes"], ["0", "No"]] },
+      { key: "hx_neurologic", label: "Neurologic (non-AD)", help: "History", options: [["", "Not recorded"], ["1", "Yes"], ["0", "No"]] },
+      { key: "hx_smoking", label: "Smoking", help: "History", options: [["", "Not recorded"], ["1", "Yes"], ["0", "No"]] },
     ],
   },
   stage2: {
@@ -19,6 +27,9 @@ export const STAGE_FIELDS = {
       { key: "ab42_ab40", label: "Aβ42/40 ratio", help: "0–1", min: 0, max: 1, step: "any" },
       { key: "nfl", label: "NfL", help: "pg/mL", min: 0, step: "any" },
       { key: "gfap", label: "GFAP", help: "pg/mL", min: 0, step: "any" },
+      { key: "ptau181", label: "p-tau181", help: "pg/mL", min: 0, step: "any" },
+      { key: "nfl_legacy", label: "NfL (older assay)", help: "pg/mL, Blennow lab", min: 0, step: "any" },
+      { key: "apoe4", label: "APOE ε4 alleles", help: "Genotype", options: [["", "Not tested"], ["0", "0 (e.g. ε3/ε3)"], ["1", "1 (e.g. ε3/ε4)"], ["2", "2 (ε4/ε4)"]] },
     ],
   },
   stage3: {
@@ -33,11 +44,10 @@ export const STAGE_FIELDS = {
   },
   stage4: {
     title: "Stage 4 · PET imaging",
-    help: "Amyloid and tau PET for narrowed-down candidates.",
+    help: "Amyloid PET and FDG-PET for narrowed-down candidates.",
     fields: [
       { key: "amyloid_centiloid", label: "Amyloid Centiloid", help: "−100 to 300", min: -100, max: 300, step: "any" },
-      { key: "amyloid_suvr", label: "Amyloid SUVR", help: "Summary SUVR", min: 0, step: "any" },
-      { key: "tau_suvr", label: "Tau SUVR", help: "Meta-temporal", min: 0, step: "any" },
+      { key: "fdg", label: "FDG-PET MetaROI", help: "e.g. 1.24", min: 0.5, max: 2, step: "any" },
     ],
   },
 };

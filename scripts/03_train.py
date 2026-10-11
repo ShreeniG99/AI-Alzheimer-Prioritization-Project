@@ -21,6 +21,9 @@ from ml.model_utils import (
     top_k_recall, priority_thresholds, save_bundle, feature_names_from_pipeline
 )
 
+CORE_FEATURES = ["age", "education", "mmse", "adas", "faq", "sex"]
+
+
 def evaluate(y, p, top_k_fraction):
     y = np.asarray(y, dtype=int)
     p = np.asarray(p, dtype=float)
@@ -150,7 +153,11 @@ def main(stage):
         "participants": int(len(df)),
         "positives": int(y.sum()),
         "positive_rate": float(y.mean()),
-        "complete_input_fraction": float(X[features].notna().all(axis=1).mean()),
+        # Completeness of the core screening inputs (comorbidities and other
+        # extras are optional and often unrecorded).
+        "complete_input_fraction": float(
+            X[[f for f in features if f in CORE_FEATURES]].notna().all(axis=1).mean()
+        ),
         "train_rows": int(len(X_train)),
         "validation_rows": int(len(X_val)),
         "test_rows": int(len(X_test)),

@@ -39,7 +39,9 @@ def test_later_stages_include_their_modality(workspace):
 
     assert {"ptau217", "ab42_ab40"} <= features("stage2")
     assert {"eTIV", "nWBV", "ASF"} <= features("stage3")
-    assert {"amyloid_centiloid", "tau_suvr"} <= features("stage4")
+    assert {"amyloid_centiloid", "fdg"} <= features("stage4")
+    assert {"apoe4", "ptau181"} <= features("stage2")
+    assert {"bmi", "gds", "hx_cardiovascular"} <= features("stage1")
     assert not {"eTIV", "ptau217", "amyloid_centiloid"} & features("stage1")
 
 

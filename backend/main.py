@@ -113,6 +113,12 @@ def stage_model(stage: Optional[str]):
     return model
 
 
+def stage_measurements(stage: str) -> List[str]:
+    """The measurements that define a stage (graded for data quality)."""
+    info = STAGE_INFO[stage]
+    return info.get("trigger_features", info["modality_features"])
+
+
 def task_for(features: Dict[str, Any]) -> Dict[str, str]:
     if features.get("cdr") == 0:
         return {
@@ -281,7 +287,7 @@ def model_info(user: User = Depends(get_current_user)) -> Dict[str, Any]:
         if model:
             stages.append({"available": True, **model.info()})
         else:
-            info = {k: v for k, v in STAGE_INFO[stage].items() if k != "modality_features"}
+            info = {k: v for k, v in STAGE_INFO[stage].items() if not k.endswith("_features")}
             stages.append({"stage": stage, "available": False, **info})
     return {
         "available_stages": registry.available(),
@@ -338,7 +344,7 @@ def assessment(
         "patient_ref": payload["patient_ref"],
         **task_for(features),
         "inputs": features,
-        "data_quality": calculate_quality(features, model.features),
+        "data_quality": calculate_quality(features, model.features, stage_measurements(model.stage)),
         "prediction": {k: result[k] for k in (
             "current_stage", "current_stage_name", "risk_score", "priority", "model", "model_version"
         )},
@@ -361,12 +367,15 @@ def predict(
     if payload.get("stage"):
         model = stage_model(payload["stage"])
         result = model.predict(features)
-        quality = calculate_quality(features, model.features)
+        quality = calculate_quality(features, model.features, stage_measurements(model.stage))
     else:
         pathway = run_pathway(features, explain=False)
         result = {k: pathway[k] for k in ("risk_score", "priority", "model", "model_version")}
         result.update(stage=pathway["current_stage"], trace=pathway["trace"], next_step=pathway["next_step"])
-        quality = calculate_quality(features, registry.get(pathway["current_stage"]).features)
+        quality = calculate_quality(
+            features, registry.get(pathway["current_stage"]).features,
+            stage_measurements(pathway["current_stage"]),
+        )
     audit(db, request, user.username, "predict", f"patient:{payload['patient_ref']}")
     return {"patient_ref": payload["patient_ref"], **result, "data_quality": quality, "scope": SCOPE}
 
@@ -427,7 +436,10 @@ def rank(
             "priority": result["priority"],
             "model_version": result["model_version"],
             "next_step": result["next_step"],
-            "data_quality": calculate_quality(features, registry.get(result["current_stage"]).features),
+            "data_quality": calculate_quality(
+                features, registry.get(result["current_stage"]).features,
+                stage_measurements(result["current_stage"]),
+            ),
         })
     audit(db, request, user.username, "rank", "adhoc", {"patients": len(entries), "capacity": body.capacity})
     return {"task": "triage", **rank_scored(entries, body.capacity)}

@@ -21,6 +21,18 @@ FEATURE_LABELS = {
     "mmse": "MMSE",
     "adas": "ADAS-Cog 11",
     "faq": "FAQ",
+    "bmi": "BMI",
+    "sbp": "Systolic blood pressure",
+    "gds": "Depression score (GDS)",
+    "hx_cardiovascular": "Cardiovascular history",
+    "hx_endocrine": "Endocrine/metabolic history",
+    "hx_psychiatric": "Psychiatric history",
+    "hx_neurologic": "Neurologic history",
+    "hx_smoking": "Smoking history",
+    "apoe4": "APOE ε4 alleles",
+    "ptau181": "Plasma p-tau181",
+    "nfl_legacy": "Plasma NfL (older assay)",
+    "fdg": "FDG-PET metabolism",
     "sex": "Sex",
     "ptau217": "Plasma p-tau217",
     "ab42_ab40": "Plasma Aβ42/40",
@@ -31,8 +43,6 @@ FEATURE_LABELS = {
     "ASF": "ASF",
     "hippocampus_icv": "Hippocampal volume / ICV",
     "amyloid_centiloid": "Amyloid PET (Centiloid)",
-    "amyloid_suvr": "Amyloid PET SUVR",
-    "tau_suvr": "Tau PET SUVR",
 }
 
 

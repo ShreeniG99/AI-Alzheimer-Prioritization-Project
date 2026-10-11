@@ -121,10 +121,25 @@ ALIASES = {
         "ABETA42_40",
     ],
 
+    # UPENN Quanterix NfL. The older Blennow-lab assay (PLASMA_NFL) is on a
+    # different scale and is kept separately as nfl_legacy.
     "nfl": [
         "NfL_Q",
         "NFL",
+    ],
+
+    "ptau181": [
+        "PLASMAPTAU181",
+        "PTAU181",
+    ],
+
+    "nfl_legacy": [
         "PLASMA_NFL",
+    ],
+
+    "gds": [
+        "GDTOTAL",
+        "GDS",
     ],
 
     "gfap": [
@@ -167,6 +182,9 @@ ALIASES = {
 # ============================================================
 
 def pick(df, key, required=False):
+    # Keys produced only by table-specific transforms have no aliases.
+    if key not in ALIASES:
+        return None
     return find_column(
         df,
         ALIASES[key],
@@ -185,7 +203,10 @@ def get_feature(df, key):
 
 # ADNI encodes "not done / not applicable" with negative sentinel codes
 # (e.g. -1, -4). They must never reach the model as real values.
-ADNI_MISSING_CODES = [-1, -4, -9]
+ADNI_MISSING_CODES = [-1, -4, -5, -9]
+
+# Columns where negative values are genuine measurements, not missing codes.
+SENTINEL_EXEMPT = {"amyloid_centiloid"}
 
 # Plausible ranges; values outside are treated as missing.
 VALID_RANGES = {
@@ -199,6 +220,18 @@ VALID_RANGES = {
     "nWBV": (0.5, 0.95),
     "ASF": (0.7, 2.0),
     "hippocampus_icv": (0.001, 0.01),
+    "bmi": (12, 60),
+    "sbp": (76, 250),
+    "gds": (0, 15),
+    "ptau217": (0, 10),
+    "ab42_ab40": (0.01, 0.3),
+    "nfl": (0, 300),
+    "gfap": (0, 3000),
+    "ptau181": (0, 200),
+    "nfl_legacy": (0, 500),
+    "apoe4": (0, 2),
+    "amyloid_centiloid": (-100, 300),
+    "fdg": (0.5, 2.0),
 }
 
 
@@ -210,7 +243,7 @@ def clean_clinical_values(data):
         numeric = pd.to_numeric(data[column], errors="coerce")
         if numeric.notna().sum() == 0:
             continue
-        sentinel = numeric.isin(ADNI_MISSING_CODES)
+        sentinel = numeric.isin(ADNI_MISSING_CODES) & (column not in SENTINEL_EXEMPT)
         if sentinel.any():
             print(f"{column}: {int(sentinel.sum())} ADNI missing-code value(s) set to NaN")
         data.loc[sentinel, column] = np.nan
@@ -363,18 +396,113 @@ def prepare_cognitive():
 # Each pathway stage adds one modality. A modality may be spread over
 # several ADNI tables (e.g. amyloid and tau PET); all matching tables are
 # merged on RID.
+# ------------------------------------------------------------
+# Table-specific transforms. Each returns (features, dates) where
+# features has RID + feature columns and dates is the measurement date
+# per row (None for time-invariant data such as genotype).
+# ------------------------------------------------------------
+
+def _num(df, col):
+    return pd.to_numeric(df[col], errors="coerce") if col in df.columns else pd.Series(np.nan, index=df.index)
+
+
+def transform_apoe(df):
+    """APOE genotype ("3/4") -> number of e4 alleles (0, 1, 2). Time-invariant."""
+    genotype = df["GENOTYPE"].astype(str)
+    valid = genotype.str.match(r"^[234]/[234]$")
+    out = pd.DataFrame({"RID": df["RID"], "apoe4": genotype.str.count("4").where(valid)})
+    return out.dropna(subset=["apoe4"]), None
+
+
+def transform_fdg(df):
+    """UC Berkeley FDG (long format): MetaROI mean = cortical glucose metabolism."""
+    df = df[df["ROINAME"].astype(str).str.lower() == "metaroi"]
+    return pd.DataFrame({"RID": df["RID"], "fdg": _num(df, "MEAN")}), df["EXAMDATE"]
+
+
+def transform_amyloid(df):
+    """UC Berkeley amyloid PET. Centiloid is harmonised across tracers
+    (florbetapir, florbetaben, NAV4694); tracer-specific SUVR is not."""
+    if "qc_flag" in df.columns:
+        qc = pd.to_numeric(df["qc_flag"], errors="coerce")
+        df = df[~qc.isin([0, -2])]  # 0 = fail, -2 = cannot be assessed
+    out = pd.DataFrame({"RID": df["RID"]})
+    for key in ["amyloid_centiloid", "amyloid_suvr"]:
+        c = pick(df, key)
+        if c is not None:
+            out[key] = pd.to_numeric(df[c], errors="coerce")
+    return out, df[find_column(df, ["SCANDATE", "EXAMDATE"])]
+
+
+def transform_vitals(df):
+    """BMI (units: weight 1=lb 2=kg; height 1=in 2=cm) and systolic BP."""
+    weight = _num(df, "VSWEIGHT")
+    weight = weight.where(_num(df, "VSWTUNIT") != 1, weight * 0.45359237)
+    height = _num(df, "VSHEIGHT")
+    unit = _num(df, "VSHTUNIT")
+    # Height unit is often unrecorded after screening; infer it from the value.
+    inches = (unit == 1) | (~unit.isin([1, 2]) & height.between(48, 84))
+    height_cm = height.where(~inches, height * 2.54)
+    height_cm = height_cm.where(height_cm.between(120, 215))
+    bmi = weight / (height_cm / 100) ** 2
+    return pd.DataFrame({"RID": df["RID"], "bmi": bmi, "sbp": _num(df, "VSBPSYS")}), df["VISDATE"]
+
+
+MEDHIST_FLAGS = {
+    "MH4CARD": "hx_cardiovascular",
+    "MH9ENDO": "hx_endocrine",
+    "MHPSYCH": "hx_psychiatric",
+    "MH2NEURL": "hx_neurologic",
+    "MH16SMOK": "hx_smoking",
+}
+
+
+def transform_medhist(df):
+    """Baseline medical history (comorbidities), 1 = yes, 0 = no."""
+    out = pd.DataFrame({"RID": df["RID"]})
+    for column, name in MEDHIST_FLAGS.items():
+        out[name] = _num(df, column)
+    return out, df["VISDATE"]
+
+
+TRANSFORMS = {
+    "APOERES_": transform_apoe,
+    "UCBERKELEYFDG_": transform_fdg,
+    "UCBERKELEY_AMY_6MM_": transform_amyloid,
+    "VITALS_": transform_vitals,
+    "MEDHIST_": transform_medhist,
+}
+
+
+# Each pathway stage adds one modality. A modality may be spread over
+# several ADNI tables; all matching tables are merged on RID (the first
+# table providing a feature wins).
 MODALITIES = {
+    "clinical": {
+        "prefixes": ["VITALS_", "GDSCALE_", "MEDHIST_"],
+        "keys": ["bmi", "sbp", "gds", *MEDHIST_FLAGS.values()],
+    },
     "plasma": {
-        "prefixes": ["UPENN_PLASMA_FUJIREBIO_QUANTERIX_", "PLASMA_"],
-        "keys": ["ptau217", "ab42_ab40", "nfl", "gfap"],
+        "prefixes": [
+            "UPENN_PLASMA_FUJIREBIO_QUANTERIX_",
+            "UGOTPTAU181_",
+            "ADNI_BLENNOWPLASMANFLLONG_",
+            "PLASMA_",
+            "APOERES_",
+        ],
+        "keys": ["ptau217", "ab42_ab40", "nfl", "gfap", "ptau181", "nfl_legacy", "apoe4"],
+        # A participant reaches Stage 2 only with an actual blood biomarker;
+        # genotype alone (available for nearly everyone) does not count.
+        "inclusion_keys": ["ptau217", "ab42_ab40", "nfl", "gfap", "ptau181", "nfl_legacy"],
     },
     "mri": {
         "prefixes": ["All_Subjects_Key_MRI_", "UCSFFSX7_"],
         "keys": ["eTIV", "nWBV", "ASF", "hippocampus_icv"],
     },
     "pet": {
-        "prefixes": ["UCBERKELEY_AMY_6MM_", "UCBERKELEY_TAU_6MM_"],
-        "keys": ["amyloid_centiloid", "amyloid_suvr", "tau_suvr"],
+        "prefixes": ["UCBERKELEY_AMY_6MM_", "UCBERKELEYFDG_"],
+        "keys": ["amyloid_centiloid", "amyloid_suvr", "fdg"],
+        "inclusion_keys": ["amyloid_centiloid", "fdg"],
     },
 }
 
@@ -382,10 +510,10 @@ MODALITIES = {
 # Earlier optional modalities are left-joined (missing values are handled
 # by the model's imputation + missingness indicators).
 STAGE_MODALITIES = {
-    "stage1": {"required": None, "optional": []},
-    "stage2": {"required": "plasma", "optional": []},
-    "stage3": {"required": "mri", "optional": ["plasma"]},
-    "stage4": {"required": "pet", "optional": ["plasma", "mri"]},
+    "stage1": {"required": None, "optional": ["clinical"]},
+    "stage2": {"required": "plasma", "optional": ["clinical"]},
+    "stage3": {"required": "mri", "optional": ["clinical", "plasma"]},
+    "stage4": {"required": "pet", "optional": ["clinical", "plasma", "mri"]},
 }
 
 
@@ -450,7 +578,7 @@ def nearest_to_baseline(part, dates, baseline_dates, window_days):
     return part.drop(columns=["_date", "_delta", "baseline_date"])
 
 
-def prepare_modality(name, baseline_dates=None, window_days=180):
+def prepare_modality(name, baseline_dates=None, window_days=180, required=False):
 
     spec = MODALITIES[name]
 
@@ -461,6 +589,21 @@ def prepare_modality(name, baseline_dates=None, window_days=180):
         try:
             raw = ensure_rid(read_prefix(prefix))
         except FileNotFoundError:
+            continue
+
+        transform = next((f for p, f in TRANSFORMS.items() if prefix.startswith(p)), None)
+        if transform is not None:
+            part, dates = transform(raw)
+            if dates is None:  # time-invariant (e.g. genotype)
+                part = part.drop_duplicates("RID")
+            elif baseline_dates is not None:
+                part = nearest_to_baseline(part, dates.loc[part.index], baseline_dates, window_days)
+            else:
+                part = part.loc[baseline_only(raw.loc[part.index]).index].drop_duplicates("RID")
+            print(f"{prefix}: {part['RID'].nunique():,} participants")
+            result = part if result is None else result.merge(
+                part.drop(columns=[c for c in part.columns if c in result.columns and c != "RID"]),
+                on="RID", how="outer")
             continue
 
         date_col = find_column(raw, ["EXAMDATE", "SCANDATE", "VISDATE", "EXAMDATE2", "USERDATE"], required=False)
@@ -508,6 +651,12 @@ def prepare_modality(name, baseline_dates=None, window_days=180):
             f"No {name} table with any of {spec['keys']} was found "
             f"(looked for prefixes {spec['prefixes']})."
         )
+
+    # When this modality defines stage membership, keep only participants
+    # with an actual measurement (e.g. a plasma biomarker, not genotype alone).
+    inclusion = [k for k in spec.get("inclusion_keys", []) if k in result.columns]
+    if required and inclusion:
+        result = result[result[inclusion].notna().any(axis=1)]
 
     return result
 
@@ -881,7 +1030,7 @@ def main(stage):
 
         print(f"\nLoading {name} variables...")
 
-        part = prepare_modality(name, baseline_dates, window_days)
+        part = prepare_modality(name, baseline_dates, window_days, required=True)
 
         print(f"{name} participants: {part['RID'].nunique():,}")
 
@@ -919,23 +1068,7 @@ def main(stage):
     # --------------------------------------------------------
 
     numeric_columns = [
-        "age",
-        "education",
-        "mmse",
-        "moca",
-        "adas",
-        "faq",
-        "eTIV",
-        "nWBV",
-        "ASF",
-        "hippocampus_icv",
-        "ptau217",
-        "ab42_ab40",
-        "nfl",
-        "gfap",
-        "amyloid_centiloid",
-        "amyloid_suvr",
-        "tau_suvr",
+        c for c in data.columns if c not in ("RID", "target", "sex", "ses")
     ]
 
     for c in numeric_columns:
