@@ -31,22 +31,29 @@ Stage 4  PET imaging         ──► refined risk ──► specialist review
 
 | Stage | Model inputs | ADNI source tables (prefix) |
 |---|---|---|
-| 1 Cognitive screening | age, education, sex, MMSE, ADAS-Cog 11, FAQ | `PTDEMOG_`, `MMSE_`, `ADAS_`, `FAQ_` |
-| 2 Blood biomarkers | Stage 1 + plasma p-tau217, Aβ42/40, NfL, GFAP | `UPENN_PLASMA_FUJIREBIO_QUANTERIX_` |
-| 3 MRI | Stage 1 + eTIV, nWBV, ASF, hippocampal volume/ICV (+ plasma when available) | `UCSFFSX7_` (FreeSurfer 7; measures derived, see below) |
-| 4 PET | Stage 1 + amyloid Centiloid/SUVR, tau SUVR (+ earlier modalities) | `UCBERKELEY_AMY_6MM_`, `UCBERKELEY_TAU_6MM_` |
+| 1 Cognitive screening | age, education, sex, MMSE, ADAS-Cog 11, FAQ + comorbidities (BMI, systolic BP, GDS depression, cardiovascular / endocrine / psychiatric / neurologic / smoking history) | `PTDEMOG_`, `MMSE_`, `ADAS_`, `FAQ_`, `VITALS_`, `GDSCALE_`, `MEDHIST_` |
+| 2 Blood biomarkers | Stage 1 + APOE ε4, plasma p-tau217, p-tau181, Aβ42/40, NfL, GFAP | `UPENN_PLASMA_FUJIREBIO_QUANTERIX_`, `UGOTPTAU181_`, `ADNI_BLENNOWPLASMANFLLONG_`, `APOERES_` |
+| 3 MRI | Stage 1 + eTIV, nWBV, ASF, hippocampal volume/ICV (+ blood results when available) | `UCSFFSX7_` (FreeSurfer 7; measures derived, see below) |
+| 4 PET | Stage 1 + amyloid Centiloid, FDG-PET metabolism (+ earlier modalities) | `UCBERKELEY_AMY_6MM_`, `UCBERKELEYFDG_` |
 
 **Target** (`config.yaml → target.mode: progression_24m`): among participants who are
 cognitively normal or MCI at baseline with ≥ 24 months of follow-up, `1` = dementia
 diagnosis (DXSUM) within 24 months, `0` otherwise.
 
-**Results on ADNI:** see [`docs/RESULTS.md`](docs/RESULTS.md). Stage 1: 1,677
-participants, 128 converters, test ROC-AUC 0.894, and the top-20% tier captures 77% of
-converters. Stage 3: 1,645 participants, test ROC-AUC 0.881. Stages 2 and 4 need plasma
-and PET tables that were not in the current download.
+**Results on ADNI:** see [`docs/RESULTS.md`](docs/RESULTS.md). All four stages are
+trained:
+
+| Stage | Participants | Converters | Test ROC-AUC | Converters in top 20% |
+|---|---|---|---|---|
+| 1 Screening | 1,677 | 128 | 0.898 | 81% |
+| 2 Blood | 1,071 | 52 | 0.903 | 82% |
+| 3 MRI | 1,645 | 128 | 0.900 | 80% |
+| 4 PET | 1,365 | 71 | 0.895 | 79% |
+
+Tau PET is not used: only 5 converters had a tau scan near baseline.
 
 **ADNI-specific handling:**
-- Negative missing codes (`-1`, `-4`) become missing values.
+- Negative missing codes (`-1`, `-4`, `-5`) become missing values; negative Centiloids are kept.
 - Age is derived from `PTDOB`.
 - eTIV/nWBV/ASF/hippocampal volume are computed from FreeSurfer volumes.
 - Each later-stage measurement is the one closest to the baseline date (±180 days).

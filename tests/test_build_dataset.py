@@ -71,3 +71,45 @@ def test_nearest_to_baseline_uses_closest_scan_within_window():
     out = build.nearest_to_baseline(part, dates, baseline, window_days=180)
     assert out["RID"].tolist() == [1]  # participant 2's only scan is 4 years later
     assert out["eTIV"].iloc[0] == 1500.0
+
+
+def test_apoe_genotype_to_e4_count():
+    df = pd.DataFrame({"RID": [1, 2, 3, 4], "GENOTYPE": ["3/3", "3/4", "4/4", "unknown"]})
+    out, dates = build.transform_apoe(df)
+    assert dates is None
+    assert dict(zip(out["RID"], out["apoe4"])) == {1: 0, 2: 1, 3: 2}
+
+
+def test_vitals_bmi_units_and_inferred_height_unit():
+    df = pd.DataFrame({
+        "RID": [1, 2, 3],
+        "VISDATE": ["2010-01-01"] * 3,
+        "VSWEIGHT": [154.0, 70.0, 70.0],
+        "VSWTUNIT": [1, 2, 2],      # pounds, kg, kg
+        "VSHEIGHT": [70.0, 175.0, 69.0],
+        "VSHTUNIT": [1, 2, -4],     # inches, cm, unrecorded (69 -> inches)
+        "VSBPSYS": [130, 140, 120],
+    })
+    out, _ = build.transform_vitals(df)
+    expected = [154 * 0.45359237 / (1.778 ** 2), 70 / 1.75 ** 2, 70 / (69 * 0.0254) ** 2]
+    assert out["bmi"].tolist() == pytest.approx(expected, rel=1e-6)
+    assert out["sbp"].tolist() == [130, 140, 120]
+
+
+def test_fdg_uses_meta_roi_and_amyloid_drops_failed_qc():
+    fdg = pd.DataFrame({
+        "RID": [1, 1], "EXAMDATE": ["2010-01-01"] * 2,
+        "ROINAME": ["MetaROI", "Top50PonsVermis"], "MEAN": [1.21, 1.0],
+    })
+    out, _ = build.transform_fdg(fdg)
+    assert out["fdg"].tolist() == [1.21]
+
+    amy = pd.DataFrame({
+        "RID": [1, 2, 3], "SCANDATE": ["2010-01-01"] * 3,
+        "qc_flag": [2, 0, -1], "CENTILOIDS": [-4.0, 50.0, 10.0], "SUMMARY_SUVR": [1.0, 1.3, 1.1],
+    })
+    out, _ = build.transform_amyloid(amy)
+    assert out["RID"].tolist() == [1, 3]  # qc 0 = fail removed; -1 = not assessed kept
+    # A Centiloid of -4 is a real value, not an ADNI missing code.
+    cleaned = build.clean_clinical_values(out.assign(target=0))
+    assert cleaned.loc[cleaned["RID"] == 1, "amyloid_centiloid"].item() == -4.0

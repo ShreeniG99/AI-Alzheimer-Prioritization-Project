@@ -7,10 +7,12 @@ class PatientAssessment(BaseModel):
     """
     Structured patient assessment across the progressive pathway.
 
-    Stage 1 (cognitive screening):  age, education, sex, mmse, adas, faq
-    Stage 2 (blood biomarkers):     ptau217, ab42_ab40, nfl, gfap
+    Stage 1 (cognitive screening):  age, education, sex, mmse, adas, faq,
+                                    bmi, sbp, gds, hx_* comorbidity flags
+    Stage 2 (blood biomarkers):     ptau217, ab42_ab40, nfl, gfap, ptau181,
+                                    nfl_legacy, apoe4
     Stage 3 (MRI):                  eTIV, nWBV, ASF, hippocampus_icv
-    Stage 4 (PET):                  amyloid_centiloid, amyloid_suvr, tau_suvr
+    Stage 4 (PET):                  amyloid_centiloid, fdg
 
     Contextual only (never model inputs): moca, cdr.
     CDR is excluded from modelling to avoid label leakage; it is only used to
@@ -28,11 +30,26 @@ class PatientAssessment(BaseModel):
     adas: Optional[float] = Field(default=None, ge=0, le=70, description="ADAS-Cog 11 total score.")
     faq: Optional[float] = Field(default=None, ge=0, le=30, description="Functional Activities Questionnaire total.")
 
+    # Stage 1 comorbidities
+    bmi: Optional[float] = Field(default=None, ge=12, le=60, description="Body-mass index (kg/m²).")
+    sbp: Optional[float] = Field(default=None, ge=60, le=260, description="Systolic blood pressure (mmHg).")
+    gds: Optional[float] = Field(default=None, ge=0, le=15, description="Geriatric Depression Scale total (0-15).")
+    hx_cardiovascular: Optional[float] = Field(default=None, ge=0, le=1, description="History of cardiovascular disease (1/0).")
+    hx_endocrine: Optional[float] = Field(default=None, ge=0, le=1, description="Endocrine-metabolic disease, e.g. diabetes (1/0).")
+    hx_psychiatric: Optional[float] = Field(default=None, ge=0, le=1, description="Psychiatric history (1/0).")
+    hx_neurologic: Optional[float] = Field(default=None, ge=0, le=1, description="Neurologic history other than AD (1/0).")
+    hx_smoking: Optional[float] = Field(default=None, ge=0, le=1, description="Smoking history (1/0).")
+
     # Stage 2
     ptau217: Optional[float] = Field(default=None, ge=0, description="Plasma p-tau217 (pg/mL).")
     ab42_ab40: Optional[float] = Field(default=None, ge=0, le=1, description="Plasma Aβ42/Aβ40 ratio.")
     nfl: Optional[float] = Field(default=None, ge=0, description="Plasma neurofilament light (pg/mL).")
     gfap: Optional[float] = Field(default=None, ge=0, description="Plasma GFAP (pg/mL).")
+    ptau181: Optional[float] = Field(default=None, ge=0, description="Plasma p-tau181 (pg/mL, Gothenburg Simoa).")
+    nfl_legacy: Optional[float] = Field(
+        default=None, ge=0, description="Plasma NfL, older Blennow-lab assay (pg/mL; different scale from nfl).",
+    )
+    apoe4: Optional[float] = Field(default=None, ge=0, le=2, description="Number of APOE ε4 alleles (0, 1, 2).")
 
     # Stage 3
     eTIV: Optional[float] = Field(default=None, ge=0, description="Estimated total intracranial volume (cm³).")
@@ -45,8 +62,7 @@ class PatientAssessment(BaseModel):
 
     # Stage 4
     amyloid_centiloid: Optional[float] = Field(default=None, ge=-100, le=300, description="Amyloid PET Centiloid.")
-    amyloid_suvr: Optional[float] = Field(default=None, ge=0, description="Amyloid PET summary SUVR.")
-    tau_suvr: Optional[float] = Field(default=None, ge=0, description="Tau PET meta-temporal SUVR.")
+    fdg: Optional[float] = Field(default=None, ge=0.5, le=2.0, description="FDG-PET MetaROI mean (glucose metabolism).")
 
     # Contextual
     moca: Optional[float] = Field(default=None, ge=0, le=30, description="MoCA total. Contextual only.")

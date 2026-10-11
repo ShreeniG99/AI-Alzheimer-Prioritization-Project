@@ -18,9 +18,11 @@ const EMPTY = {
 
 const NUMERIC_KEYS = [
   "age", "education", "mmse", "adas", "faq", "sex", "moca", "cdr",
-  "ptau217", "ab42_ab40", "nfl", "gfap",
+  "bmi", "sbp", "gds", "hx_cardiovascular", "hx_endocrine", "hx_psychiatric",
+  "hx_neurologic", "hx_smoking",
+  "ptau217", "ab42_ab40", "nfl", "gfap", "ptau181", "nfl_legacy", "apoe4",
   "eTIV", "nWBV", "ASF", "hippocampus_icv",
-  "amyloid_centiloid", "amyloid_suvr", "tau_suvr",
+  "amyloid_centiloid", "fdg",
 ];
 
 export default function Assessment({ modelInfo }) {

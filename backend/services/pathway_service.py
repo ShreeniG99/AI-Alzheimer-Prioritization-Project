@@ -21,7 +21,8 @@ class ModelUnavailableError(RuntimeError):
 def reached_stages(features: Dict[str, Any]) -> List[str]:
     reached = ["stage1"]
     for stage in STAGES[1:]:
-        if any(features.get(f) is not None for f in STAGE_INFO[stage]["modality_features"]):
+        triggers = STAGE_INFO[stage].get("trigger_features", STAGE_INFO[stage]["modality_features"])
+        if any(features.get(f) is not None for f in triggers):
             reached.append(stage)
     return reached
 

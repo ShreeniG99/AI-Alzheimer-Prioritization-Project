@@ -1,7 +1,7 @@
 STAGE1 = {"age": 74, "education": 14, "sex": 2, "mmse": 23, "adas": 20, "faq": 8}
-PLASMA = {"ptau217": 0.9, "ab42_ab40": 0.085, "nfl": 25, "gfap": 160}
+PLASMA = {"ptau217": 0.9, "ab42_ab40": 0.085, "nfl": 25, "gfap": 160, "apoe4": 1}
 MRI = {"eTIV": 1500, "nWBV": 0.71, "ASF": 1.17, "hippocampus_icv": 0.0045}
-PET = {"amyloid_centiloid": 80, "amyloid_suvr": 1.45, "tau_suvr": 1.5}
+PET = {"amyloid_centiloid": 80, "fdg": 1.15}
 
 
 def test_health_is_public_and_lists_stages(client):
@@ -128,3 +128,9 @@ def test_admin_only_routes(client, admin_headers):
     assert client.post("/auth/users", headers=clinician,
                        json={"username": "x-user", "password": "password123"}).status_code == 403
     assert client.get("/patients", headers=clinician).status_code == 200
+
+
+def test_genotype_alone_does_not_reach_stage2(client, admin_headers):
+    body = client.post("/assessment", headers=admin_headers, json={**STAGE1, "apoe4": 2}).json()
+    assert body["prediction"]["current_stage"] == "stage1"
+    assert body["pathway"]["stages_reached"] == ["stage1"]

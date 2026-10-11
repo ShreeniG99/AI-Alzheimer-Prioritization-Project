@@ -15,15 +15,26 @@ export default function StageInputs({ stage, values, onChange, available = true 
           <label key={field.key}>
             {field.label}
             <span className="input-help">{field.help}</span>
-            <input
-              type="number"
-              min={field.min}
-              max={field.max}
-              step={field.step}
-              value={values[field.key] ?? ""}
-              onChange={(e) => onChange(field.key, e.target.value)}
-              placeholder="Optional"
-            />
+            {field.options ? (
+              <select
+                value={values[field.key] ?? ""}
+                onChange={(e) => onChange(field.key, e.target.value)}
+              >
+                {field.options.map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="number"
+                min={field.min}
+                max={field.max}
+                step={field.step}
+                value={values[field.key] ?? ""}
+                onChange={(e) => onChange(field.key, e.target.value)}
+                placeholder="Optional"
+              />
+            )}
           </label>
         ))}
       </div>

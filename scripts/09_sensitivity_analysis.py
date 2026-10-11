@@ -237,13 +237,18 @@ def validate_reference_profile(
 
     artifact_features = artifact["features"]
 
-    if artifact_features != FEATURES:
+    missing = [f for f in FEATURES if f not in artifact_features]
+    if missing:
         raise RuntimeError(
-            "Production Stage-1 feature definition does not match "
-            "the sensitivity-analysis configuration.\n"
-            f"Model features: {artifact_features}\n"
-            f"Expected: {FEATURES}"
+            "Production Stage-1 model does not use features varied by this "
+            f"analysis: {missing}\nModel features: {artifact_features}"
         )
+
+    # Other model inputs (e.g. comorbidities) are held at "not recorded",
+    # i.e. the model's training-median imputation, a typical value.
+    for feature in artifact_features:
+        if feature not in FEATURES:
+            REFERENCE_PROFILE.setdefault(feature, None)
 
     for feature in FEATURES:
         if feature not in REFERENCE_PROFILE:
@@ -279,12 +284,12 @@ def calibrated_probability(
 
     row = {
         feature: profile.get(feature)
-        for feature in FEATURES
+        for feature in artifact["features"]
     }
 
     dataframe = pd.DataFrame(
         [row]
-    )
+    ).apply(pd.to_numeric, errors="coerce").astype(float)
 
     raw_probability = float(
         pipeline.predict_proba(

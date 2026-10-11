@@ -68,10 +68,23 @@ def simulate(n_subjects: int, seed: int) -> dict:
     asf = (1755.0 / etiv).round(3)
     nwbv = np.clip(0.75 - 0.018 * severity + rng.normal(0, 0.012, n_subjects), 0.62, 0.85).round(3)
 
-    # Stage 4: amyloid / tau PET.
+    ptau181 = np.exp(rng.normal(2.6 + 0.35 * pathology, 0.35, n_subjects)).round(2)
+    nfl_legacy = np.exp(rng.normal(3.6 + 0.2 * severity, 0.3, n_subjects)).round(1)
+    # APOE e4 carriers have more pathology on average.
+    apoe4 = np.clip(np.round(rng.normal(0.45 + 0.35 * pathology, 0.5, n_subjects)), 0, 2).astype(int)
+
+    # Stage 4: amyloid PET (Centiloid) and FDG-PET metabolism.
     centiloid = (20 + 32 * pathology + rng.normal(0, 14, n_subjects)).round(1)
     amyloid_suvr = (1.0 + 0.0059 * centiloid + rng.normal(0, 0.02, n_subjects)).round(3)
-    tau_suvr = (1.15 + 0.16 * np.maximum(pathology, -0.5) + rng.normal(0, 0.06, n_subjects)).round(3)
+    fdg = np.clip(1.30 - 0.05 * severity + rng.normal(0, 0.05, n_subjects), 0.8, 1.6).round(4)
+
+    # Stage 1 comorbidities (weak, realistic associations).
+    sbp = np.clip(rng.normal(135, 17, n_subjects), 90, 210).round(0)
+    weight_lb = np.clip(rng.normal(170, 30, n_subjects), 95, 320).round(1)
+    height_in = np.clip(rng.normal(66, 4, n_subjects), 56, 78).round(1)
+    gds = np.clip(np.round(rng.normal(1.3 + 0.4 * np.maximum(severity, 0), 1.3, n_subjects)), 0, 15)
+    hx = {name: (rng.random(n_subjects) < p).astype(int) for name, p in
+          [("MH4CARD", 0.6), ("MH9ENDO", 0.4), ("MHPSYCH", 0.3), ("MH2NEURL", 0.15), ("MH16SMOK", 0.4)]}
 
     # Conversion to AD dementia over follow-up for CN/MCI participants.
     logit = -3.6 + 0.9 * severity + 1.3 * pathology + 0.6 * (baseline_dx == 2)
@@ -86,7 +99,7 @@ def simulate(n_subjects: int, seed: int) -> dict:
         "mmse": mmse, "adas": adas, "faq": faq, "moca": moca,
         "ptau217": ptau217, "ab42_ab40": ab42_ab40, "nfl": nfl, "gfap": gfap,
         "etiv": etiv, "asf": asf, "nwbv": nwbv,
-        "centiloid": centiloid, "amyloid_suvr": amyloid_suvr, "tau_suvr": tau_suvr,
+        "centiloid": centiloid, "amyloid_suvr": amyloid_suvr, "fdg": fdg,
         "conversion_month": conversion_month, "last_month": last_month,
     })
 
@@ -116,26 +129,42 @@ def simulate(n_subjects: int, seed: int) -> dict:
     tables["FAQ"] = bl.assign(FAQTOTAL=faq_series)
     tables["MOCA"] = bl.assign(MOCA=drop_random(pd.Series(moca), 0.65))
 
+    visit = bl.assign(VISDATE=bl["EXAMDATE"])
+    vitals = visit.assign(VSWEIGHT=weight_lb, VSWTUNIT=1, VSHEIGHT=height_in, VSHTUNIT=1, VSBPSYS=sbp)
+    vitals.loc[rng.random(n_subjects) < 0.3, "VSHTUNIT"] = -4  # unit often unrecorded in ADNI
+    tables["VITALS"] = vitals
+    tables["GDSCALE"] = visit.assign(GDTOTAL=gds)
+    medhist = visit.assign(**hx)
+    tables["MEDHIST"] = medhist[rng.random(n_subjects) < 0.7]
+    genotype = np.select([apoe4 == 0, apoe4 == 1], ["3/3", "3/4"], "4/4")
+    tables["APOERES"] = bl[["RID"]].assign(VISCODE="sc", GENOTYPE=genotype, USERDATE="2010-02-01")
+
     # Not every participant reaches every pathway stage.
     def subset(fraction):
         return rng.random(n_subjects) < fraction
 
     plasma = subset(0.70)
-    tables["UPENN_PLASMA_FUJIREBIO_QUANTERIX"] = bl[plasma].assign(
-        pT217_F=ptau217[plasma], AB42_AB40_F=ab42_ab40[plasma],
-        NfL_Q=nfl[plasma], GFAP_Q=gfap[plasma],
+    upenn = plasma & subset(0.6)
+    tables["UPENN_PLASMA_FUJIREBIO_QUANTERIX"] = bl[upenn].assign(
+        pT217_F=ptau217[upenn], AB42_AB40_F=ab42_ab40[upenn],
+        NfL_Q=nfl[upenn], GFAP_Q=gfap[upenn],
     )
+    legacy = plasma & ~upenn
+    tables["UGOTPTAU181"] = bl[legacy].assign(PLASMAPTAU181=ptau181[legacy])
+    tables["ADNI_BLENNOWPLASMANFLLONG"] = bl[legacy].assign(PLASMA_NFL=nfl_legacy[legacy])
     mri = subset(0.85)
     tables["All_Subjects_Key_MRI"] = bl[mri].assign(eTIV=etiv[mri], nWBV=nwbv[mri], ASF=asf[mri])
     pet = subset(0.60)
-    tables["UCBERKELEY_AMY_6MM"] = bl[pet].assign(
-        SCANDATE=BASE_DATE.strftime("%Y-%m-%d"),
-        CENTILOIDS=centiloid[pet], SUMMARY_SUVR=amyloid_suvr[pet],
+    amyloid = pet & subset(0.8)
+    tables["UCBERKELEY_AMY_6MM"] = bl[amyloid].assign(
+        SCANDATE=BASE_DATE.strftime("%Y-%m-%d"), qc_flag=2,
+        CENTILOIDS=centiloid[amyloid], SUMMARY_SUVR=amyloid_suvr[amyloid],
     )
-    tau = pet & subset(0.75)
-    tables["UCBERKELEY_TAU_6MM"] = bl[tau].assign(
-        SCANDATE=BASE_DATE.strftime("%Y-%m-%d"), META_TEMPORAL_SUVR=tau_suvr[tau],
-    )
+    fdg_rows = bl[pet][["RID", "VISCODE", "EXAMDATE"]]
+    tables["UCBERKELEYFDG_8mm"] = pd.concat([
+        fdg_rows.assign(ROINAME="MetaROI", MEAN=fdg[pet]),
+        fdg_rows.assign(ROINAME="Top50PonsVermis", MEAN=1.0),
+    ])
 
     # Longitudinal diagnosis summary.
     rows = []
