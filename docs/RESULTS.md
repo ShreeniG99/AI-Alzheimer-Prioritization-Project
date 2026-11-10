@@ -70,19 +70,23 @@ interpretability.
 | Stage | Selected | Validation ROC-AUC | Validation PR-AUC |
 |---|---|---|---|
 | 1 Screening | Logistic regression | 0.899 | 0.494 |
-| 2 Blood | Random forest | 0.921 | 0.251 |
-| 3 MRI | Random forest | 0.912 | 0.486 |
+| 2 Blood | Random forest | 0.921 | 0.266 |
+| 3 MRI | Random forest | 0.914 | 0.479 |
 | 4 PET | Logistic regression | 0.918 | 0.339 |
 
 ## Untouched test split
 
 | | Stage 1 | Stage 2 | Stage 3 | Stage 4 |
 |---|---|---|---|---|
-| ROC-AUC | 0.898 | 0.903 | 0.900 | 0.895 |
-| PR-AUC | 0.434 | 0.492 | 0.392 | 0.232 |
+| ROC-AUC | 0.898 | 0.908 | 0.901 | 0.895 |
+| PR-AUC | 0.434 | 0.495 | 0.403 | 0.232 |
 | Converters in top 20% | 81% | 82% | 80% | 79% |
-| Brier | 0.058 | 0.038 | 0.059 | 0.048 |
-| ECE (calibration error) | 0.035 | 0.027 | 0.026 | 0.028 |
+| Brier | 0.058 | 0.038 | 0.058 | 0.048 |
+| ECE (calibration error) | 0.035 | 0.027 | 0.027 | 0.028 |
+
+Figures are from the models trained with the pinned Python 3.15 stack
+(`requirements.txt`). Random-forest stages differ in the third decimal from runs on
+older scikit-learn versions.
 
 At low prevalence the system prioritises by rank: the HIGH tier (top 20%) captures
 about 80% of 24-month converters, against 20% for random selection (≈ 4× lift).
@@ -94,8 +98,8 @@ Baseline: (30 − MMSE) + ADAS-Cog 11 + FAQ, with no fitting. Each stage's own t
 | Stage | Model ROC / top-20% | Simple sum ROC / top-20% | Verdict |
 |---|---|---|---|
 | 1 Screening | 0.898 / 81% | 0.887 / 77% | model slightly better |
-| 2 Blood | 0.903 / 82% | 0.928 / 91% | **simple sum better** (11 test converters) |
-| 3 MRI | 0.900 / 80% | 0.873 / 64% | model better |
+| 2 Blood | 0.908 / 82% | 0.928 / 91% | **simple sum better** (11 test converters) |
+| 3 MRI | 0.901 / 80% | 0.873 / 64% | model better |
 | 4 PET | 0.895 / 79% | 0.838 / 57% | **model clearly better** |
 
 ## What each data source adds (repeated 5×5-fold cross-validation)
@@ -230,4 +234,5 @@ done
 python scripts/05_evaluate_prioritization.py
 python scripts/08_uncertainty_analysis.py --stage stage1 --replicates 500
 python scripts/09_sensitivity_analysis.py
+python scripts/12_inference_analysis.py              # docs/INFERENCES.md figures
 ```

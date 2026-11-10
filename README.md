@@ -48,14 +48,14 @@ Stage 4  PET imaging         ──► refined risk ──► specialist review
 cognitively normal or MCI at baseline with ≥ 24 months of follow-up, `1` = dementia
 diagnosis (DXSUM) within 24 months, `0` otherwise.
 
-**Results on ADNI:** see [`docs/RESULTS.md`](docs/RESULTS.md). All four stages are
-trained:
+**Results on ADNI:** see [`docs/RESULTS.md`](docs/RESULTS.md); what to infer from them
+is in [`docs/INFERENCES.md`](docs/INFERENCES.md). All four stages are trained:
 
 | Stage | Participants | Converters | Test ROC-AUC | Converters in top 20% |
 |---|---|---|---|---|
 | 1 Screening | 1,677 | 128 | 0.898 | 81% |
-| 2 Blood | 1,071 | 52 | 0.903 | 82% |
-| 3 MRI | 1,645 | 128 | 0.900 | 80% |
+| 2 Blood | 1,071 | 52 | 0.908 | 82% |
+| 3 MRI | 1,645 | 128 | 0.901 | 80% |
 | 4 PET | 1,365 | 71 | 0.895 | 79% |
 
 Tau PET is not used: only 5 converters had a tau scan near baseline.
@@ -125,6 +125,7 @@ scripts/
   09_sensitivity_analysis.py     one-at-a-time input sensitivity
   10_build_tempo_target.py       TEMPO target: CDR-SB slope over 0-36 months
   11_train_tempo.py              TEMPO models per stage + prediction intervals
+  12_inference_analysis.py       cohort overlap, subgroups, input reduction (aggregates)
 ml/                         preprocessing, models, calibration, metrics, SHAP
 backend/                    FastAPI app, auth, audit log, pathway + model registry
 frontend/                   React (Vite) clinician dashboard
@@ -171,6 +172,7 @@ python scripts/06_data_quality_analysis.py
 python scripts/07_feature_distribution_analysis.py
 python scripts/08_uncertainty_analysis.py --stage stage1 --replicates 500
 python scripts/09_sensitivity_analysis.py
+python scripts/12_inference_analysis.py                 # reports/inference_summary.json
 ```
 
 If ADNI column names differ from the ones expected, add them to `ALIASES` in
