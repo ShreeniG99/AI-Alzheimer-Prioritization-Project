@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 845" width="1400" height="845" font-family="Arial, Helvetica, 'Liberation Sans', sans-serif">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 1 L10 5 L0 9 z" fill="#000"/></marker></defs>
+<rect width="1400" height="845" fill="#fff"/>
+<text x="30" y="40" font-size="18" font-weight="700" font-style="normal" fill="#000" text-anchor="start">Fig. Methodology of IDEA</text>
+<rect x="30" y="70" width="400" height="150" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="42" y="94" font-size="16" font-weight="700" font-style="normal" fill="#000" text-anchor="start">1. Data (ADNI)</text>
+<text x="42" y="118" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Cognitive tests, demographics, vitals,</text>
+<text x="42" y="138" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">medical history; plasma biomarkers,</text>
+<text x="42" y="158" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">APOE; FreeSurfer 7 MRI; amyloid and</text>
+<text x="42" y="178" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">FDG PET; diagnoses and CDR-SB visits</text>
+<rect x="500" y="70" width="400" height="150" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="512" y="94" font-size="16" font-weight="700" font-style="normal" fill="#000" text-anchor="start">2. Preprocessing</text>
+<text x="512" y="118" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Missing codes (-1, -4, -5) removed</text>
+<text x="512" y="138" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Age from date of birth; MRI ratios</text>
+<text x="512" y="158" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Measure closest to baseline (±180 d)</text>
+<text x="512" y="178" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">CDR excluded from inputs</text>
+<rect x="970" y="70" width="400" height="150" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="982" y="94" font-size="16" font-weight="700" font-style="normal" fill="#000" text-anchor="start">3. Split by participant</text>
+<text x="982" y="118" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">60% train / 20% validation / 20% test</text>
+<text x="982" y="138" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Risk target: dementia within 24 mo</text>
+<text x="982" y="158" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Rate target: CDR-SB change per year</text>
+<text x="982" y="178" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Test set used once, at the end</text>
+<path d="M430 145.0 L498 145.0" fill="none" stroke="#000" stroke-width="1.2" marker-end="url(#a)"/>
+<path d="M900 145.0 L968 145.0" fill="none" stroke="#000" stroke-width="1.2" marker-end="url(#a)"/>
+<text x="30" y="262" font-size="15" font-weight="700" font-style="italic" fill="#000" text-anchor="start">(a) Progression risk</text>
+<text x="30" y="482" font-size="15" font-weight="700" font-style="italic" fill="#000" text-anchor="start">(b) Rate of decline (TEMPO)</text>
+<rect x="30" y="275" width="290" height="150" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="42" y="299" font-size="16" font-weight="700" font-style="normal" fill="#000" text-anchor="start">4a. Model selection</text>
+<text x="42" y="323" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Logistic regression, random</text>
+<text x="42" y="343" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">forest, XGBoost; chosen on</text>
+<text x="42" y="363" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">PR-AUC, top-20% recall,</text>
+<text x="42" y="383" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">calibration, interpretability</text>
+<rect x="360" y="275" width="290" height="150" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="372" y="299" font-size="16" font-weight="700" font-style="normal" fill="#000" text-anchor="start">5a. Calibration, explanation</text>
+<text x="372" y="323" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Platt scaling</text>
+<text x="372" y="343" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">SHAP values per patient</text>
+<text x="372" y="363" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Bootstrap interval (500)</text>
+<text x="372" y="383" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Tiers: HIGH / MEDIUM / LOW</text>
+<rect x="690" y="275" width="290" height="150" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="702" y="299" font-size="16" font-weight="700" font-style="normal" fill="#000" text-anchor="start">6a. Test-set evaluation</text>
+<text x="702" y="323" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">ROC-AUC 0.90, ECE ≈ 0.03</text>
+<text x="702" y="343" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Top 20% contains 79–82%</text>
+<text x="702" y="363" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">of converters (random: 20%)</text>
+<rect x="30" y="495" width="290" height="150" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="42" y="519" font-size="16" font-weight="700" font-style="normal" fill="#000" text-anchor="start">4b. Model selection</text>
+<text x="42" y="543" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Ridge, random forest, XGBoost;</text>
+<text x="42" y="563" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">chosen on Spearman ρ, fast-</text>
+<text x="42" y="583" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">decliner capture, interpretability</text>
+<text x="42" y="603" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">(ridge chosen at every stage)</text>
+<rect x="360" y="495" width="290" height="150" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="372" y="519" font-size="16" font-weight="700" font-style="normal" fill="#000" text-anchor="start">5b. Interval, explanation</text>
+<text x="372" y="543" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Split-conformal 80% interval</text>
+<text x="372" y="563" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">SHAP values per patient</text>
+<text x="372" y="583" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Tiers: STABLE / MODERATE / FAST</text>
+<rect x="690" y="495" width="290" height="150" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="702" y="519" font-size="16" font-weight="700" font-style="normal" fill="#000" text-anchor="start">6b. Test-set evaluation</text>
+<text x="702" y="543" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Top 20% contains 76–90%</text>
+<text x="702" y="563" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">of fast decliners</text>
+<text x="702" y="583" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Interval coverage 78–85%</text>
+<path d="M320 350.0 L358 350.0" fill="none" stroke="#000" stroke-width="1.2" marker-end="url(#a)"/>
+<path d="M650 350.0 L688 350.0" fill="none" stroke="#000" stroke-width="1.2" marker-end="url(#a)"/>
+<path d="M320 570.0 L358 570.0" fill="none" stroke="#000" stroke-width="1.2" marker-end="url(#a)"/>
+<path d="M650 570.0 L688 570.0" fill="none" stroke="#000" stroke-width="1.2" marker-end="url(#a)"/>
+<path d="M1170 220 L1170 245 L280 245 L280 273" fill="none" stroke="#000" stroke-width="1.2" marker-end="url(#a)"/>
+<path d="M15 245 L15 465 L280 465 L280 493" fill="none" stroke="#000" stroke-width="1.2" marker-end="url(#a)"/>
+<path d="M280 245 L15 245" fill="none" stroke="#000" stroke-width="1.2"/>
+<rect x="1040" y="275" width="330" height="370" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="1052" y="299" font-size="16" font-weight="700" font-style="normal" fill="#000" text-anchor="start">7. Output to clinician</text>
+<text x="1052" y="323" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Risk (%) with interval and tier</text>
+<text x="1052" y="343" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Decline rate with 80% interval</text>
+<text x="1052" y="363" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Combined outlook (risk × rate)</text>
+<text x="1052" y="383" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">SHAP reasons for both</text>
+<text x="1052" y="403" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Queue re-ranked when blood,</text>
+<text x="1052" y="423" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">MRI or PET results arrive</text>
+<text x="1052" y="443" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start"></text>
+<text x="1052" y="463" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">Suggested window for cognitive</text>
+<text x="1052" y="483" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">follow-up visits, from the</text>
+<text x="1052" y="503" font-size="14" font-weight="400" font-style="normal" fill="#222" text-anchor="start">decline rate (see text)</text>
+<path d="M980 350.0 L1038 350.0" fill="none" stroke="#000" stroke-width="1.2" marker-end="url(#a)"/>
+<path d="M980 570.0 L1038 570.0" fill="none" stroke="#000" stroke-width="1.2" marker-end="url(#a)"/>
+<text x="30" y="700" font-size="15" font-weight="400" font-style="normal" fill="#000" text-anchor="start">Steps 4–6 are repeated for each stage of the diagnostic pathway:</text>
+<rect x="30" y="718" width="300" height="44" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="180.0" y="746" font-size="14" font-weight="400" font-style="normal" fill="#000" text-anchor="middle">Stage 1: cognitive screening</text>
+<path d="M330 740 L374 740" fill="none" stroke="#000" stroke-width="1.2" marker-end="url(#a)"/>
+<rect x="376" y="718" width="300" height="44" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="526.0" y="746" font-size="14" font-weight="400" font-style="normal" fill="#000" text-anchor="middle">Stage 2: blood biomarkers</text>
+<path d="M676 740 L720 740" fill="none" stroke="#000" stroke-width="1.2" marker-end="url(#a)"/>
+<rect x="722" y="718" width="300" height="44" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="872.0" y="746" font-size="14" font-weight="400" font-style="normal" fill="#000" text-anchor="middle">Stage 3: MRI</text>
+<path d="M1022 740 L1066 740" fill="none" stroke="#000" stroke-width="1.2" marker-end="url(#a)"/>
+<rect x="1068" y="718" width="300" height="44" fill="#fff" stroke="#000" stroke-width="1.2"/>
+<text x="1218.0" y="746" font-size="14" font-weight="400" font-style="normal" fill="#000" text-anchor="middle">Stage 4: PET</text>
+<text x="30" y="800" font-size="14" font-weight="400" font-style="normal" fill="#333" text-anchor="start">Only patients who are not LOW priority move to the next stage. In the Stage 1 test set the LOW tier (100 of 336) had no converters.</text>
+<text x="30" y="822" font-size="14" font-weight="400" font-style="normal" fill="#333" text-anchor="start">Cohort sizes: 1,677 / 1,071 / 1,645 / 1,365 participants for Stages 1–4.</text>
+</svg>

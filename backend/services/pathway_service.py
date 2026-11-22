@@ -12,6 +12,7 @@ review. It is never a diagnosis or treatment recommendation.
 from typing import Any, Dict, List
 
 from backend.services.model_registry import STAGE_INFO, STAGES, registry
+from backend.services.visit_window_service import suggest_visit_window
 
 
 class ModelUnavailableError(RuntimeError):
@@ -100,6 +101,7 @@ def estimate_decline(features: Dict[str, Any], stages: List[str], priority: str,
     model = registry.get_tempo(stage)
     result = model.predict(features)
     result["outlook"] = decline_outlook(priority, result["speed_tier"])
+    result["visit_window"] = suggest_visit_window(result["interval_high"])
     if explain:
         result["explanation"] = model.explain(features)
     return result

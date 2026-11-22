@@ -21,6 +21,10 @@ Team: Harithra S, Tharika N S, Thanushika Sri RA, Shreenidhi G (Amrita Vishwa Vi
 
 ## What the system does
 
+![IDEA methodology: ADNI data, preprocessing, participant-level split, then a risk lane and a TEMPO lane (train, calibrate/explain, evaluate) feeding a clinician-facing output](docs/figures/methodology.png)
+
+*Methodology overview ([SVG](docs/figures/methodology.svg)).*
+
 ```
 Clinician signs in (JWT, audit-logged)
         │
@@ -88,6 +92,10 @@ contextual only (69% missing in the cohort).
 | Single assessment / early detection | `POST /assessment` | Score along the pathway, explain, save to queue. `cdr = 0` → `early_detection`. |
 | Triage | `POST /triage` | Rank the saved queue against available capacity (optionally one stage). |
 | New-data re-rank | `PATCH /patients/{id}` | Add biomarker / MRI / PET results → re-score → re-rank the queue. |
+
+Every assessment with a TEMPO estimate also returns a **suggested visit window** for
+cognitive/functional follow-up visits (`decline.visit_window`), sized from the
+patient's decline rate. See [`docs/VISIT_WINDOWS.md`](docs/VISIT_WINDOWS.md).
 
 ### Models
 

@@ -219,6 +219,14 @@ export function DeclinePanel({ decline, priority }) {
         <strong>{decline.outlook.label}</strong>
         <p>{decline.outlook.detail}</p>
       </div>
+      {decline.visit_window && (
+        <div className="next-step">
+          <span className="metric-label">SUGGESTED ASSESSMENT VISIT WINDOW</span>
+          <strong>{decline.visit_window.label}</strong>
+          <p>{decline.visit_window.basis}</p>
+          <p className="metric-note">{decline.visit_window.scope}</p>
+        </div>
+      )}
     </div>
   );
 }
