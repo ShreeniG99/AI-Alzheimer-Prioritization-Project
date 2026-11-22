@@ -1,0 +1,21 @@
+# Training image for the IDEA pipeline (local Docker or HPC via Apptainer).
+# The full python image ships a C compiler, which pyyaml needs on Python 3.15.
+# ADNI data, models and reports are never copied in (see .dockerignore);
+# they are mounted at run time.
+FROM python:3.15
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    MPLBACKEND=Agg \
+    MPLCONFIGDIR=/tmp/matplotlib
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY config.yaml ./
+COPY ml ./ml
+COPY scripts ./scripts
+
+CMD ["python", "scripts/03_train.py", "--help"]

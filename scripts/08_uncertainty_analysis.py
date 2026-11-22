@@ -21,16 +21,25 @@ Usage:
 """
 
 import argparse
+import os
+import time
 
 import joblib
 import numpy as np
 import pandas as pd
+from joblib import Parallel, delayed
 from sklearn.base import clone
 
 from common import artifacts_dir, load_config, processed_dir, reports_dir
 
 
-def main(stage: str, replicates: int, seed: int) -> None:
+def _fit_replicate(pipeline, X, y, idx):
+    model = clone(pipeline)
+    model.fit(X.iloc[idx], y[idx])
+    return model.predict_proba(X)[:, 1].astype(np.float32)
+
+
+def main(stage: str, replicates: int, seed: int, n_jobs: int = 1) -> None:
     model_path = artifacts_dir() / f"{stage}_model.joblib"
     data_path = processed_dir() / f"{stage}.csv"
 
@@ -45,24 +54,28 @@ def main(stage: str, replicates: int, seed: int) -> None:
     X = data[features]
     y = data["target"].astype(int).to_numpy()
 
+    # Draw every resample first, in the same order as a sequential run, so the
+    # result is identical whatever the number of parallel workers.
     rng = np.random.default_rng(seed)
-    predictions = np.empty((replicates, len(data)), dtype=np.float32)
-
-    completed = 0
+    samples = []
     attempts = 0
-    while completed < replicates:
+    while len(samples) < replicates:
         attempts += 1
         if attempts > replicates * 5:
             raise RuntimeError("Too many bootstrap resamples without both classes.")
         idx = rng.integers(0, len(data), size=len(data))
         if len(np.unique(y[idx])) < 2:
             continue
-        model = clone(bundle["pipeline"])
-        model.fit(X.iloc[idx], y[idx])
-        predictions[completed] = model.predict_proba(X)[:, 1]
-        completed += 1
-        if completed % 50 == 0:
-            print(f"Bootstrap replicates: {completed}/{replicates}")
+        samples.append(idx)
+
+    # Each refit is independent, so they run in parallel (one per CPU core on HPC).
+    start = time.perf_counter()
+    results = Parallel(n_jobs=n_jobs, verbose=5)(
+        delayed(_fit_replicate)(bundle["pipeline"], X, y, idx) for idx in samples
+    )
+    elapsed = time.perf_counter() - start
+    predictions = np.vstack(results).astype(np.float32)
+    print(f"Bootstrap refits: {replicates} in {elapsed:.1f} s using n_jobs={n_jobs}")
 
     artifacts_dir().mkdir(parents=True, exist_ok=True)
     out_path = artifacts_dir() / f"{stage}_bootstrap_predictions.npz"
@@ -97,5 +110,10 @@ if __name__ == "__main__":
     ap.add_argument("--stage", choices=list(load_config()["features"]), default="stage1")
     ap.add_argument("--replicates", type=int, default=500)
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument(
+        "--n-jobs", type=int,
+        default=int(os.environ.get("IDEA_N_JOBS") or os.environ.get("SLURM_CPUS_PER_TASK") or 1),
+        help="Parallel workers for the refits (default: $IDEA_N_JOBS, $SLURM_CPUS_PER_TASK or 1).",
+    )
     args = ap.parse_args()
-    main(args.stage, args.replicates, args.seed)
+    main(args.stage, args.replicates, args.seed, args.n_jobs)

@@ -53,8 +53,13 @@ function App() {
       <nav className="topnav">
         <div className="topnav-inner">
           <div className="brand">
-            <strong>Alzheimer's Diagnostic Prioritization</strong>
-            <span>Research prototype</span>
+            <div className="brand-logo">
+              <img src="/images/idea-logo.png" alt="IDEA logo" />
+            </div>
+            <div>
+              <strong>IDEA</strong>
+              <span>Intelligent Detection of Early Alzheimer's</span>
+            </div>
           </div>
           <div className="nav-links">
             {PAGES.filter((p) => !p.admin || isAdmin).map((p) => (
@@ -95,24 +100,11 @@ function App() {
         {page === "model" && <ModelInfo modelInfo={modelInfo} />}
         {page === "audit" && isAdmin && <AuditLog />}
 
-        <section className="card final-notice">
-          <h2>Research Prototype Notice</h2>
-          <p>
-            This clinical decision-support research prototype estimates
-            progression-related research risk from retrospective ADNI data to
-            support prioritization for further diagnostic evaluation.
-          </p>
-          <p>
-            It does not provide a medical diagnosis, does not recommend
-            treatment, and does not replace clinician judgment, local protocols,
-            or established diagnostic evaluation.
-          </p>
-        </section>
       </main>
 
       <footer>
-        AI-Driven Prioritization for Early Alzheimer's Diagnostic Pathways ·
-        Research Prototype
+        IDEA · AI-Driven Prioritization for Early Alzheimer's Diagnostic
+        Pathways · Research Prototype
       </footer>
     </div>
   );

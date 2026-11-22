@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from backend.settings import ARTIFACTS_DIR
-from ml.model_utils import priority_from_risk
+from ml.model_utils import priority_from_risk, speed_tier
 
 logger = logging.getLogger("alzheimer.models")
 
@@ -107,9 +107,54 @@ class StageModel:
         }
 
 
+class TempoModel(StageModel):
+    """TEMPO: predicted annual change in CDR-SB for one pathway stage."""
+
+    def __init__(self, stage: str, bundle: Dict[str, Any], metadata: Dict[str, Any]):
+        self.stage = stage
+        self.bundle = bundle
+        self.metadata = metadata
+        self.pipeline = bundle["pipeline"]
+        self.features = bundle["features"]
+        self.model_name = bundle["selected_model"]
+        self.model_version = bundle["model_version"]
+        self.cohort = bundle.get("cohort", {})
+        self.halfwidth = float(bundle["interval_halfwidth"])
+        self.coverage = float(bundle["interval_coverage"])
+        self.speed_thresholds = bundle["speed_thresholds"]
+        self._explainer = None
+        self._explainer_lock = threading.Lock()
+
+    def predict(self, features: Dict[str, Any]) -> Dict[str, Any]:
+        slope = float(self.pipeline.predict(self.frame(features))[0])
+        return {
+            "stage": self.stage,
+            "predicted_cdrsb_per_year": slope,
+            "interval_low": slope - self.halfwidth,
+            "interval_high": slope + self.halfwidth,
+            "interval_coverage": self.coverage,
+            "speed_tier": speed_tier(slope, self.speed_thresholds),
+            "model": self.model_name,
+            "model_version": self.model_version,
+        }
+
+    def info(self) -> Dict[str, Any]:
+        return {
+            "stage": self.stage,
+            "selected_model": self.model_name,
+            "model_version": self.model_version,
+            "cohort": self.cohort,
+            "speed_thresholds": self.speed_thresholds,
+            "interval_halfwidth": self.halfwidth,
+            "test_metrics": self.metadata.get("untouched_test_metrics"),
+            "baselines": self.metadata.get("baselines"),
+        }
+
+
 class ModelRegistry:
     def __init__(self):
         self._models: Dict[str, StageModel] = {}
+        self._tempo: Dict[str, TempoModel] = {}
         self._loaded = False
         self._lock = threading.Lock()
 
@@ -118,22 +163,24 @@ class ModelRegistry:
             if self._loaded:
                 return
             for stage in STAGES:
-                path = ARTIFACTS_DIR / f"{stage}_model.joblib"
-                if not path.exists():
-                    continue
-                try:
-                    bundle = joblib.load(path)
-                    meta_path = ARTIFACTS_DIR / f"{stage}_metadata.json"
-                    metadata = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
-                    self._models[stage] = StageModel(stage, bundle, metadata)
-                    logger.info("Loaded %s model from %s", stage, path)
-                except Exception:  # a corrupt artifact must not take the API down
-                    logger.exception("Could not load %s", path)
+                for prefix, cls, target in (("", StageModel, self._models), ("tempo_", TempoModel, self._tempo)):
+                    path = ARTIFACTS_DIR / f"{prefix}{stage}_model.joblib"
+                    if not path.exists():
+                        continue
+                    try:
+                        bundle = joblib.load(path)
+                        meta_path = ARTIFACTS_DIR / f"{prefix}{stage}_metadata.json"
+                        metadata = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
+                        target[stage] = cls(stage, bundle, metadata)
+                        logger.info("Loaded %s%s model from %s", prefix, stage, path)
+                    except Exception:  # a corrupt artifact must not take the API down
+                        logger.exception("Could not load %s", path)
             self._loaded = True
 
     def reload(self) -> None:
         with self._lock:
             self._models = {}
+            self._tempo = {}
             self._loaded = False
         self._load()
 
@@ -144,6 +191,14 @@ class ModelRegistry:
     def get(self, stage: str) -> Optional[StageModel]:
         self._load()
         return self._models.get(stage)
+
+    def tempo_available(self) -> List[str]:
+        self._load()
+        return [s for s in STAGES if s in self._tempo]
+
+    def get_tempo(self, stage: str) -> Optional[TempoModel]:
+        self._load()
+        return self._tempo.get(stage)
 
 
 registry = ModelRegistry()

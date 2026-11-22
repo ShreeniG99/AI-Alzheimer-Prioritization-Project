@@ -140,6 +140,7 @@ def record_to_dict(record: PatientRecord, detail: bool = False) -> Dict[str, Any
         "priority": record.priority,
         "model_version": record.model_version,
         "next_step": (record.pathway or {}).get("next_step"),
+        "decline": decline_summary((record.pathway or {}).get("decline")),
         "created_by": record.created_by,
         "created_at": record.created_at.isoformat(),
         "updated_at": record.updated_at.isoformat(),
@@ -148,6 +149,13 @@ def record_to_dict(record: PatientRecord, detail: bool = False) -> Dict[str, Any
         data["explanation"] = record.explanation
         data["pathway"] = record.pathway
     return data
+
+
+def decline_summary(decline: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """TEMPO estimate without its (large) SHAP explanation, for lists."""
+    if not decline:
+        return None
+    return {k: v for k, v in decline.items() if k != "explanation"}
 
 
 def apply_pathway(record: PatientRecord, result: Dict[str, Any]) -> None:
@@ -183,7 +191,11 @@ def get_record(db: Session, record_id: int) -> PatientRecord:
 
 @app.get("/health")
 def health() -> Dict[str, Any]:
-    return {"status": "ok", "available_stages": registry.available()}
+    return {
+        "status": "ok",
+        "available_stages": registry.available(),
+        "tempo_stages": registry.tempo_available(),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -285,12 +297,14 @@ def model_info(user: User = Depends(get_current_user)) -> Dict[str, Any]:
     for stage in STAGES:
         model = registry.get(stage)
         if model:
-            stages.append({"available": True, **model.info()})
+            tempo = registry.get_tempo(stage)
+            stages.append({"available": True, **model.info(), "tempo": tempo.info() if tempo else None})
         else:
             info = {k: v for k, v in STAGE_INFO[stage].items() if not k.endswith("_features")}
             stages.append({"stage": stage, "available": False, **info})
     return {
         "available_stages": registry.available(),
+        "tempo_stages": registry.tempo_available(),
         "stages": stages,
         "modality_features": {s: STAGE_INFO[s]["modality_features"] for s in STAGES},
         "scope": SCOPE,
@@ -349,6 +363,7 @@ def assessment(
             "current_stage", "current_stage_name", "risk_score", "priority", "model", "model_version"
         )},
         "pathway": {k: result[k] for k in ("stages_reached", "trace", "next_step")},
+        "decline": result["decline"],
         "explanation": result["explanation"],
         "scope": SCOPE,
     }
@@ -436,6 +451,7 @@ def rank(
             "priority": result["priority"],
             "model_version": result["model_version"],
             "next_step": result["next_step"],
+            "decline": decline_summary(result["decline"]),
             "data_quality": calculate_quality(
                 features, registry.get(result["current_stage"]).features,
                 stage_measurements(result["current_stage"]),

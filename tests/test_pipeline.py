@@ -63,3 +63,27 @@ def test_age_derived_and_missing_codes_cleaned(workspace):
     assert data["age"].between(40, 110).all()
     for column in ["education", "faq"]:
         assert (data[column].dropna() >= 0).all()
+
+
+def test_inference_summary_is_aggregate_and_consistent(workspace):
+    summary = json.loads((workspace["ALZ_REPORTS_DIR"] / "inference_summary.json").read_text())
+
+    overlap = summary["cohort_overlap"]
+    assert set(overlap["participants"]) == set(STAGES)
+    assert overlap["in_every_stage"] <= min(overlap["participants"].values())
+    assert overlap["participants_with_conflicting_labels"] == 0
+
+    test = summary["stage1_test_breakdown"]
+    assert test["top20_converters"] + test["converters_outside_top20"] == test["converters"]
+    assert test["top20_converters"] + test["top20_non_converters"] == test["top20_patients"]
+    assert sum(t["patients"] for t in test["tiers"].values()) == test["patients"]
+    assert sum(t["converters"] for t in test["tiers"].values()) == test["converters"]
+    assert test["pairs_ranked_wrong"] <= test["converter_vs_non_converter_pairs"]
+
+    for scores in summary["stage1_input_reduction"].values():
+        assert 0.5 < scores["roc_auc"] <= 1.0
+    for stage in STAGES[1:]:
+        assert "screening_plus_this_stage" in summary["stage_value_same_participants"][stage]
+
+    # Aggregates only: no participant identifiers in the report.
+    assert "RID" not in json.dumps(summary)

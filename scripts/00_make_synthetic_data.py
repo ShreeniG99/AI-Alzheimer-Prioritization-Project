@@ -181,6 +181,22 @@ def simulate(n_subjects: int, seed: int) -> dict:
                          "EXAMDATE": date.strftime("%Y-%m-%d"), "DIAGNOSIS": dx})
     tables["DXSUM"] = pd.DataFrame(rows)
 
+    # Longitudinal CDR Sum of Boxes (TEMPO target): baseline level and
+    # yearly rate both rise with severity/pathology; converters speed up.
+    cdr_rows = []
+    cdr_base = np.clip(np.maximum(severity + 0.6, 0) * 1.2 + rng.normal(0, 0.4, n_subjects), 0, 18)
+    cdr_rate = np.maximum(0, 0.15 + 0.35 * severity + 0.30 * pathology + rng.normal(0, 0.3, n_subjects))
+    for i, s in enumerate(subjects.itertuples(index=False)):
+        for month in VISIT_MONTHS:
+            if month > s.last_month:
+                break
+            boost = 0.8 * max(0, month - s.conversion_month) / 12
+            value = cdr_base[i] + cdr_rate[i] * month / 12 + boost + rng.normal(0, 0.25)
+            date = BASE_DATE + pd.DateOffset(months=month)
+            cdr_rows.append({"RID": s.RID, "VISCODE2": VISIT_CODES[month], "VISDATE": date.strftime("%Y-%m-%d"),
+                             "CDRSB": round(float(np.clip(value, 0, 18)) * 2) / 2})
+    tables["CDR"] = pd.DataFrame(cdr_rows)
+
     return tables
 
 

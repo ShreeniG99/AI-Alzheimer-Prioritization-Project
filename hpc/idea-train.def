@@ -1,0 +1,28 @@
+# Apptainer (Singularity) image for training IDEA on an HPC cluster.
+# Build from the repository root:
+#   apptainer build idea-train.sif hpc/idea-train.def
+# (use --fakeroot if your cluster requires it, or build on a workstation and copy the .sif)
+# ADNI data is never copied in; jobs bind it at run time.
+Bootstrap: docker
+From: python:3.15
+
+%files
+    requirements.txt /app/requirements.txt
+    config.yaml /app/config.yaml
+    ml /app/ml
+    scripts /app/scripts
+
+%post
+    pip install --no-cache-dir -r /app/requirements.txt
+
+%environment
+    export PYTHONDONTWRITEBYTECODE=1
+    export PYTHONUNBUFFERED=1
+    export MPLBACKEND=Agg
+    export MPLCONFIGDIR=/tmp/matplotlib
+
+%runscript
+    cd /app && exec python "$@"
+
+%labels
+    Project IDEA - Intelligent Detection of Early Alzheimer's

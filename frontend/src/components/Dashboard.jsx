@@ -8,17 +8,22 @@ export default function Dashboard({ modelInfo, onNavigate }) {
 
   return (
     <section className="card dashboard-card">
-      <div className="eyebrow">CLINICAL DECISION-SUPPORT RESEARCH PROTOTYPE</div>
-      <h1>
-        AI-Driven Alzheimer's
-        <br />
-        Diagnostic Prioritization
-      </h1>
-      <p className="hero-description">
-        Calibrated risk estimation, SHAP explanations and capacity-aware
-        prioritization along a progressive diagnostic pathway: cognitive
-        screening → blood biomarkers → MRI → PET.
-      </p>
+      <div className="dashboard-hero">
+        <div>
+          <div className="eyebrow">CLINICAL DECISION-SUPPORT RESEARCH PROTOTYPE</div>
+          <h1>
+            IDEA
+            <span>Intelligent Detection of Early Alzheimer's</span>
+          </h1>
+          <p className="hero-description">
+            Who should be tested first, and how fast will they decline? Calibrated
+            risk estimation, TEMPO decline-rate prediction, SHAP explanations and
+            capacity-aware prioritization along a progressive diagnostic pathway:
+            cognitive screening → blood biomarkers → MRI → PET.
+          </p>
+        </div>
+        <img className="hero-illustration" src="/images/patient-ideas.webp" alt="" />
+      </div>
 
       <div className="dashboard-stats">
         <div className="stat-card">
@@ -69,11 +74,6 @@ export default function Dashboard({ modelInfo, onNavigate }) {
         </button>
       </div>
 
-      <div className="research-notice">
-        <strong>Research prototype:</strong> This dashboard supports research
-        prioritization. It does not provide a medical diagnosis or treatment
-        recommendation.
-      </div>
     </section>
   );
 }

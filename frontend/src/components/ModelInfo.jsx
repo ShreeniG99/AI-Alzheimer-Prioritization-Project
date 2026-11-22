@@ -66,6 +66,51 @@ export default function ModelInfo({ modelInfo }) {
         </table>
       </div>
 
+      <h3>TEMPO: expected decline (annual CDR-SB change)</h3>
+      <p className="section-description">
+        Ridge regression, random forest and XGBoost compared per stage; metrics on
+        an untouched test split. "Fast captured" = share of truly fast decliners
+        (≥ 1 point/year) in the predicted top 20%.
+      </p>
+      <div className="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Stage</th><th>Model</th><th>Cohort</th><th>MAE</th><th>R²</th>
+              <th>Spearman</th><th>Fast captured</th><th>Simple-sum fast captured</th><th>80% interval</th>
+            </tr>
+          </thead>
+          <tbody>
+            {modelInfo.stages.map((s) => {
+              const t = s.tempo;
+              if (!t) {
+                return (
+                  <tr key={s.stage}>
+                    <td><strong>{s.name}</strong></td>
+                    <td colSpan={8} className="muted">Not trained — run scripts/11_train_tempo.py --stage {s.stage}.</td>
+                  </tr>
+                );
+              }
+              const m = t.test_metrics || {};
+              const fmt = (v) => (v === undefined || v === null ? "—" : Number(v).toFixed(3));
+              return (
+                <tr key={s.stage}>
+                  <td><strong>{s.name}</strong><small className="cell-sub">{s.stage}</small></td>
+                  <td>{t.selected_model}</td>
+                  <td>{t.cohort?.participants}</td>
+                  <td>{fmt(m.mae)}</td>
+                  <td>{fmt(m.r2)}</td>
+                  <td>{fmt(m.spearman)}</td>
+                  <td>{m.fast_capture !== undefined ? pct(m.fast_capture, 0) : "—"}</td>
+                  <td>{t.baselines?.impairment_sum_ranking ? pct(t.baselines.impairment_sum_ranking.fast_capture, 0) : "—"}</td>
+                  <td>±{Number(t.interval_halfwidth).toFixed(2)}/yr</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
       {modelInfo.stages.filter((s) => s.available).map((s) => (
         <div key={s.stage} className="feature-block">
           <h3>{s.name} features</h3>

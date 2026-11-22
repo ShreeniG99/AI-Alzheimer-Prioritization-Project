@@ -60,7 +60,7 @@ export function ShapChart({ explanation }) {
       <p className="section-description">
         {explanation.method} on the {explanation.stage} {explanation.model?.replace("_", " ")} model
         (values in {explanation.output_space}). Bars to the right raised this
-        patient's score; bars to the left lowered it.
+        patient's estimate; bars to the left lowered it.
       </p>
       <div className="shap-chart">
         {items.map((c) => {
@@ -158,5 +158,75 @@ export function UncertaintyPanel({ uncertainty }) {
         </div>
       )}
     </>
+  );
+}
+
+const TIER_CLASS = { FAST: "high", MODERATE: "medium", STABLE: "low" };
+
+export function SpeedBadge({ tier }) {
+  if (!tier) return <span className="muted">—</span>;
+  return <span className={`table-priority ${TIER_CLASS[tier] || "low"}`}>{tier}</span>;
+}
+
+export function slopeText(value) {
+  return `${value >= 0 ? "+" : ""}${Number(value).toFixed(2)}`;
+}
+
+const QUADRANTS = [
+  { key: "high-fast", risk: "High risk", speed: "Fast decline", label: "Test first, refer urgently" },
+  { key: "high-slow", risk: "High risk", speed: "Slower decline", label: "Test soon, routine follow-up" },
+  { key: "low-fast", risk: "Lower risk", speed: "Fast decline", label: "Re-check sooner" },
+  { key: "low-slow", risk: "Lower risk", speed: "Slower decline", label: "Routine pathway" },
+];
+
+export function DeclinePanel({ decline, priority }) {
+  if (!decline) {
+    return (
+      <div className="research-notice">
+        No TEMPO model is deployed yet. Train it with scripts/11_train_tempo.py.
+      </div>
+    );
+  }
+  const active = `${priority === "HIGH" ? "high" : "low"}-${decline.speed_tier === "FAST" ? "fast" : "slow"}`;
+  return (
+    <div className="decline-panel">
+      <div className="result-grid">
+        <div className="risk-panel">
+          <span className="metric-label">EXPECTED CDR-SB CHANGE · TEMPO ({decline.stage})</span>
+          <div className="risk-value">
+            {slopeText(decline.predicted_cdrsb_per_year)}
+            <small className="unit"> points/year</small>
+          </div>
+          <SpeedBadge tier={decline.speed_tier} />
+          <p className="metric-note">
+            {Math.round(decline.interval_coverage * 100)}% prediction interval:{" "}
+            {slopeText(decline.interval_low)} to {slopeText(decline.interval_high)} points/year.
+            CDR-SB runs from 0 to 18; higher means more impairment. This is a
+            research estimate of the expected rate, not a prognosis.
+          </p>
+        </div>
+        <div className="outlook-grid" aria-label="Risk and decline outlook">
+          {QUADRANTS.map((q) => (
+            <div key={q.key} className={q.key === active ? "outlook-cell active" : "outlook-cell"}>
+              <small>{q.risk} · {q.speed}</small>
+              <strong>{q.label}</strong>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="next-step">
+        <span className="metric-label">COMBINED OUTLOOK</span>
+        <strong>{decline.outlook.label}</strong>
+        <p>{decline.outlook.detail}</p>
+      </div>
+      {decline.visit_window && (
+        <div className="next-step">
+          <span className="metric-label">SUGGESTED ASSESSMENT VISIT WINDOW</span>
+          <strong>{decline.visit_window.label}</strong>
+          <p>{decline.visit_window.basis}</p>
+          <p className="metric-note">{decline.visit_window.scope}</p>
+        </div>
+      )}
+    </div>
   );
 }

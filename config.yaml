@@ -255,3 +255,39 @@ api:
 
   # Current deployment target is the pre-MRI model.
   model_stage: stage1
+
+# ============================================================
+# TEMPO - PROGRESSION RATE ("how fast will this person decline?")
+# ============================================================
+
+tempo:
+
+  # Target: annual change in CDR Sum of Boxes (CDR-SB), the slope of a
+  # straight line through each participant's CDR-SB visits from baseline
+  # to 36 months (visits up to 39 months allowed for scheduling).
+  # Cohort: the same CN/MCI baseline participants as the pathway models,
+  # with a CDR-SB visit at baseline (within 3 months), >= 3 visits and
+  # >= 12 months between the first and last visit.
+  window_months: 36
+  window_tolerance_months: 3
+  baseline_tolerance_months: 3
+  min_visits: 3
+  min_span_months: 12
+
+  # Decline-speed tiers on the predicted slope (CDR-SB points per year).
+  # In ADNI CN/MCI: ~70% < 0.3, ~19% 0.3-1.0, ~11% >= 1.0.
+  speed_thresholds:
+    moderate: 0.3
+    fast: 1.0
+
+  # Coverage of the prediction interval (split-conformal on cross-
+  # validated residuals).
+  interval_coverage: 0.80
+
+  # Fraction of the ranked cohort used for "fast-decliner capture".
+  top_fraction: 0.20
+
+  selection_weights:
+    spearman: 0.40
+    fast_capture: 0.40
+    interpretability: 0.20

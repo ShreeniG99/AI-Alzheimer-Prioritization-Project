@@ -12,6 +12,7 @@ review. It is never a diagnosis or treatment recommendation.
 from typing import Any, Dict, List
 
 from backend.services.model_registry import STAGE_INFO, STAGES, registry
+from backend.services.visit_window_service import suggest_visit_window
 
 
 class ModelUnavailableError(RuntimeError):
@@ -65,6 +66,47 @@ def next_step(stage: str, priority: str) -> Dict[str, Any]:
     }
 
 
+OUTLOOK = {
+    # (priority is high?, decline is fast?) -> combined workflow outlook
+    (True, True): ("Test first, refer urgently",
+                   "High progression risk and fast expected decline: prioritise diagnostic work-up "
+                   "and specialist review."),
+    (True, False): ("Test soon, routine follow-up",
+                    "High progression risk but slower expected decline: prioritise testing; "
+                    "follow up on the routine schedule."),
+    (False, True): ("Re-check sooner",
+                    "Lower progression risk but faster expected decline: shorten the interval "
+                    "to the next cognitive re-assessment."),
+    (False, False): ("Routine pathway",
+                     "Lower progression risk and slow expected decline: continue routine "
+                     "clinician-led follow-up."),
+}
+
+
+def decline_outlook(priority: str, tier: str) -> Dict[str, str]:
+    """Combine who-to-test-first (priority) with how-fast (TEMPO speed tier).
+
+    MEDIUM priority counts as lower risk, MODERATE decline as slower; the
+    detailed tiers are still shown alongside.
+    """
+    label, detail = OUTLOOK[(priority == "HIGH", tier == "FAST")]
+    return {"label": label, "detail": detail}
+
+
+def estimate_decline(features: Dict[str, Any], stages: List[str], priority: str, explain: bool) -> Dict[str, Any] | None:
+    """TEMPO estimate from the deepest reached stage that has a TEMPO model."""
+    stage = next((s for s in reversed(stages) if registry.get_tempo(s)), None)
+    if stage is None:
+        return None
+    model = registry.get_tempo(stage)
+    result = model.predict(features)
+    result["outlook"] = decline_outlook(priority, result["speed_tier"])
+    result["visit_window"] = suggest_visit_window(result["interval_high"])
+    if explain:
+        result["explanation"] = model.explain(features)
+    return result
+
+
 def evaluate_pathway(features: Dict[str, Any], explain: bool = True) -> Dict[str, Any]:
     if registry.get("stage1") is None:
         raise ModelUnavailableError("No Stage-1 model is deployed. Train it with scripts/03_train.py.")
@@ -97,5 +139,6 @@ def evaluate_pathway(features: Dict[str, Any], explain: bool = True) -> Dict[str
         "stages_reached": reached,
         "trace": trace,
         "next_step": next_step(current["stage"], current["priority"]),
+        "decline": estimate_decline(features, [t["stage"] for t in scored], current["priority"], explain),
         "explanation": model.explain(features) if explain else None,
     }

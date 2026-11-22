@@ -78,6 +78,9 @@ class ShapExplainer:
             raise ValueError("Model bundle has no background sample; retrain with 03_train.py.")
         background_t = self._dense(self.preprocessor.transform(background[self.features]))
 
+        # Regressors (TEMPO) explain the predicted CDR-SB slope directly.
+        regression = not hasattr(self.model, "predict_proba")
+
         if hasattr(self.model, "coef_"):
             self.explainer = shap.LinearExplainer(self.model, background_t)
             self.method = "SHAP LinearExplainer"
@@ -88,9 +91,13 @@ class ShapExplainer:
             self.output_space = "log-odds" if hasattr(self.model, "get_booster") else "probability"
         else:
             sample = shap.sample(background_t, min(50, len(background_t)), random_state=0)
-            self.explainer = shap.KernelExplainer(lambda z: self.model.predict_proba(z)[:, 1], sample)
+            predict = self.model.predict if regression else (lambda z: self.model.predict_proba(z)[:, 1])
+            self.explainer = shap.KernelExplainer(predict, sample)
             self.method = "SHAP KernelExplainer"
             self.output_space = "probability"
+        self.regression = regression
+        if regression:
+            self.output_space = "CDR-SB points per year"
 
     @staticmethod
     def _dense(matrix):
@@ -122,8 +129,8 @@ class ShapExplainer:
                 "missing": supplied is None,
                 "shap_value": value,
                 "direction": (
-                    "increases risk score" if value > 0
-                    else "decreases risk score" if value < 0
+                    ("predicts faster decline" if self.regression else "increases risk score") if value > 0
+                    else ("predicts slower decline" if self.regression else "decreases risk score") if value < 0
                     else "neutral"
                 ),
             })
@@ -139,7 +146,6 @@ class ShapExplainer:
             "interpretation": (
                 "SHAP values describe how each input moved this model's score relative to "
                 "the training-cohort average. They are not causal or independent clinical "
-                "effects. Missing inputs are imputed and their contribution includes the "
-                "missingness indicator."
+                "effects. Missing inputs are imputed with typical (median) values."
             ),
         }

@@ -2,9 +2,15 @@
 
 Clinical decision-support **research prototype** that ranks patients for further
 Alzheimer's diagnostic evaluation under limited capacity (blood tests, MRI, PET,
-clinician time). It estimates a calibrated 24-month progression risk, assigns a
-LOW / MEDIUM / HIGH priority tier, explains every score with SHAP, and routes
-patients along a progressive diagnostic pathway.
+clinician time). It answers two questions for every patient:
+
+1. **Who should be tested first?** A calibrated 24-month progression risk with a
+   LOW / MEDIUM / HIGH priority tier, routed along a progressive diagnostic pathway.
+2. **How fast will they decline?** **TEMPO** (*Trajectory Estimation Model for
+   Progression Outcomes*) predicts the yearly change in CDR Sum of Boxes over the
+   next 36 months, with a prediction interval and a STABLE / MODERATE / FAST tier.
+
+Every estimate is explained with SHAP.
 
 > It does **not** diagnose Alzheimer's disease and does **not** recommend
 > treatment. Every output supports clinician-led decisions.
@@ -15,6 +21,10 @@ Team: Harithra S, Tharika N S, Thanushika Sri RA, Shreenidhi G (Amrita Vishwa Vi
 
 ## What the system does
 
+![IDEA methodology: ADNI data, preprocessing, participant-level split, then a risk lane and a TEMPO lane (train, calibrate/explain, evaluate) feeding a clinician-facing output](docs/figures/methodology.png)
+
+*Methodology overview ([SVG](docs/figures/methodology.svg)).*
+
 ```
 Clinician signs in (JWT, audit-logged)
         │
@@ -24,8 +34,10 @@ Stage 2  Blood biomarkers    ──► refined risk ──► HIGH? escalate
 Stage 3  MRI evaluation      ──► refined risk ──► HIGH? escalate
 Stage 4  PET imaging         ──► refined risk ──► specialist review
         │
-        ├─ SHAP explanation of each score
-        ├─ score, tier, reasoning and pathway trace saved to PostgreSQL
+        ├─ TEMPO: expected CDR-SB change per year + speed tier
+        ├─ combined outlook (risk × speed), e.g. "Test first, refer urgently"
+        ├─ SHAP explanation of each score and rate
+        ├─ score, tier, rate, reasoning and pathway trace saved to PostgreSQL
         └─ capacity-aware triage queue, re-ranked whenever new data arrives
 ```
 
@@ -40,17 +52,27 @@ Stage 4  PET imaging         ──► refined risk ──► specialist review
 cognitively normal or MCI at baseline with ≥ 24 months of follow-up, `1` = dementia
 diagnosis (DXSUM) within 24 months, `0` otherwise.
 
-**Results on ADNI:** see [`docs/RESULTS.md`](docs/RESULTS.md). All four stages are
-trained:
+**Results on ADNI:** see [`docs/RESULTS.md`](docs/RESULTS.md); what to infer from them
+is in [`docs/INFERENCES.md`](docs/INFERENCES.md). All four stages are trained:
 
 | Stage | Participants | Converters | Test ROC-AUC | Converters in top 20% |
 |---|---|---|---|---|
 | 1 Screening | 1,677 | 128 | 0.898 | 81% |
-| 2 Blood | 1,071 | 52 | 0.903 | 82% |
-| 3 MRI | 1,645 | 128 | 0.900 | 80% |
+| 2 Blood | 1,071 | 52 | 0.908 | 82% |
+| 3 MRI | 1,645 | 128 | 0.901 | 80% |
 | 4 PET | 1,365 | 71 | 0.895 | 79% |
 
 Tau PET is not used: only 5 converters had a tau scan near baseline.
+
+**TEMPO on ADNI** (yearly CDR-SB change; tiers STABLE < 0.3, MODERATE 0.3–1.0,
+FAST ≥ 1.0 points/year):
+
+| Stage | Participants (fast) | Test MAE (mean baseline) | Fast decliners in top 20% | 80% interval |
+|---|---|---|---|---|
+| 1 Screening | 1,287 (148) | 0.39 (0.47) | 76% | ±0.53/yr |
+| 2 Blood | 804 (76) | 0.35 (0.42) | 80% | ±0.52/yr |
+| 3 MRI | 1,272 (146) | 0.31 (0.44) | 90% | ±0.57/yr |
+| 4 PET | 1,021 (97) | 0.32 (0.40) | 90% | ±0.53/yr |
 
 **ADNI-specific handling:**
 - Negative missing codes (`-1`, `-4`, `-5`) become missing values; negative Centiloids are kept.
@@ -70,6 +92,10 @@ contextual only (69% missing in the cohort).
 | Single assessment / early detection | `POST /assessment` | Score along the pathway, explain, save to queue. `cdr = 0` → `early_detection`. |
 | Triage | `POST /triage` | Rank the saved queue against available capacity (optionally one stage). |
 | New-data re-rank | `PATCH /patients/{id}` | Add biomarker / MRI / PET results → re-score → re-rank the queue. |
+
+Every assessment with a TEMPO estimate also returns a **suggested visit window** for
+cognitive/functional follow-up visits (`decline.visit_window`), sized from the
+patient's decline rate. See [`docs/VISIT_WINDOWS.md`](docs/VISIT_WINDOWS.md).
 
 ### Models
 
@@ -105,11 +131,17 @@ scripts/
   07_feature_distribution_analysis.py
   08_uncertainty_analysis.py     bootstrap refits -> <stage>_bootstrap_predictions.npz
   09_sensitivity_analysis.py     one-at-a-time input sensitivity
+  10_build_tempo_target.py       TEMPO target: CDR-SB slope over 0-36 months
+  11_train_tempo.py              TEMPO models per stage + prediction intervals
+  12_inference_analysis.py       cohort overlap, subgroups, input reduction (aggregates)
 ml/                         preprocessing, models, calibration, metrics, SHAP
 backend/                    FastAPI app, auth, audit log, pathway + model registry
 frontend/                   React (Vite) clinician dashboard
 tests/                      pytest: full pipeline on synthetic data + API
 deploy/aws-ec2.md           single-EC2 Docker deployment
+deploy/docker-local.md      step-by-step Docker run on a laptop
+hpc/                        SLURM + Apptainer training on an HPC cluster
+Dockerfile.train            training image (also used by the HPC jobs)
 ```
 
 ---
@@ -138,11 +170,17 @@ for s in stage1 stage2 stage3 stage4; do
   python scripts/04_sanity_check.py --stage $s
 done
 
+python scripts/10_build_tempo_target.py                 # TEMPO (how fast?)
+for s in stage1 stage2 stage3 stage4; do
+  python scripts/11_train_tempo.py --stage $s
+done
+
 python scripts/05_evaluate_prioritization.py            # reports/prioritized_cohort.csv etc.
 python scripts/06_data_quality_analysis.py
 python scripts/07_feature_distribution_analysis.py
 python scripts/08_uncertainty_analysis.py --stage stage1 --replicates 500
 python scripts/09_sensitivity_analysis.py
+python scripts/12_inference_analysis.py                 # reports/inference_summary.json
 ```
 
 If ADNI column names differ from the ones expected, add them to `ALIASES` in
@@ -157,7 +195,7 @@ them says anything about real patients.
 ```bash
 python scripts/00_make_synthetic_data.py --out data/raw_synthetic
 export ALZ_RAW_DIR=data/raw_synthetic       # PowerShell: $env:ALZ_RAW_DIR="data/raw_synthetic"
-# then run the same 02/03/05/08 commands as above
+# then run the same 02/03/10/11/05/08 commands as above
 ```
 
 `ALZ_RAW_DIR`, `ALZ_PROCESSED_DIR`, `ALZ_ARTIFACTS_DIR` and `ALZ_REPORTS_DIR` override
@@ -200,8 +238,16 @@ docker compose up --build
 
 This runs three containers: `frontend` (nginx, http://localhost:3000), `backend`
 (FastAPI, http://localhost:8000/docs) and `postgres`. `artifacts/`, `reports/` and
-`data/processed/` are mounted read-only, never baked into images. For AWS, see
+`data/processed/` are mounted read-only, never baked into images. Step-by-step
+laptop guide: [`deploy/docker-local.md`](deploy/docker-local.md). For AWS, see
 [`deploy/aws-ec2.md`](deploy/aws-ec2.md).
+
+### Training on an HPC cluster
+
+The training pipeline runs as SLURM jobs in an Apptainer container: the four
+stages train in parallel as a job array, tree models use every allocated core,
+and the 500 bootstrap refits are spread across the node (4.6× faster on 4 cores
+for the random-forest stage, with identical results). See [`hpc/README.md`](hpc/README.md).
 
 ## 5. Tests
 

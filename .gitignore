@@ -26,3 +26,7 @@ frontend/src/*_backup.*
 data/raw_synthetic/
 .venv/
 app.db
+
+# HPC job logs and container images
+hpc/logs/
+*.sif
