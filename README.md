@@ -21,7 +21,7 @@ Team: Harithra S, Tharika N S, Thanushika Sri RA, Shreenidhi G (Amrita Vishwa Vi
 
 ## What the system does
 
-![IDEA methodology: ADNI data, preprocessing, participant-level split, then a risk lane and a TEMPO lane (train, calibrate/explain, evaluate) feeding a clinician-facing output](docs/figures/methodology.png)
+![IDEA methodology flowchart: data preparation, per-stage model development loop, then use in clinic with priority and stage decisions](docs/figures/methodology.png)
 
 *Methodology overview ([SVG](docs/figures/methodology.svg)).*
 
