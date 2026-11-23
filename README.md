@@ -25,6 +25,18 @@ Team: Harithra S, Tharika N S, Thanushika Sri RA, Shreenidhi G (Amrita Vishwa Vi
 
 *Methodology overview ([SVG](docs/figures/methodology.svg)).*
 
+### Screenshots
+
+| Dashboard | Prioritization queue |
+|---|---|
+| ![IDEA dashboard: cohort summary and the four-stage pathway with the model chosen for each stage](docs/screenshots/ui-dashboard.webp) | ![Prioritization queue: patients ranked by calibrated risk with priority tier, TEMPO decline tier and next step](docs/screenshots/ui-queue.webp) |
+
+![Assessment result: TEMPO expected decline with 80% interval, combined risk-and-rate outlook, suggested visit window and SHAP reasons](docs/screenshots/ui-decline.webp)
+
+*Assessment result: expected decline (TEMPO), combined outlook, suggested visit
+window and SHAP reasons.* Screenshots use models trained on the **synthetic** demo
+data (section 2), so the counts and scores shown are not ADNI results.
+
 ```
 Clinician signs in (JWT, audit-logged)
         │
